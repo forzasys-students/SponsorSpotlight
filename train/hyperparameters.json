@@ -1,5 +1,5 @@
 {
-    "data": "/home/mehdihou/D1/YOLO-Train/Train/config_obb.yaml",
+    "data": "config_obb.yaml",
     "project": "Logo_exposure",
     "device": [1,2,3,4,5],
     "epochs": 200,
