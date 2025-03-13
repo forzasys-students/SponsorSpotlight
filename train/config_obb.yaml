@@ -5,682 +5,682 @@ val: OBB_dataset/val      # val images (relative to 'path') 128 images
 test:  OBB_dataset/test    
 
 
-
 # Classes
 names:
-  0: 3M Peltor
-  1: 3stepIT
-  2: 4 Office
-  3: 52bones
-  4: AB Karl Hedin
-  5: ABB
-  6: AF Gruppen
-  7: AGB Service
-  8: AH Sport & Business
-  9: AHNVIKS
-  10: AJ Produkter
-  11: ALT
-  12: AVIX
-  13: Abri
-  14: Adidas logo
-  15: Adidas tekst
-  16: Advokatfirman Landerdahl
-  17: Ahlberg bil
-  18: AllOffice
-  19: AllTransport
-  20: Alvelid Engineering
-  21: Alvinssons AB
-  22: Amokabel
-  23: ApQ
-  24: Aprofit SE
-  25: Arbesko
-  26: Arken
-  27: Aros Kapital
-  28: Asfalt i Göteborg AB
-  29: Asplunds Bygg
-  30: Assemblin
-  31: Audicom Pendax
-  32: Auktionsbyrån Effecta AB
-  33: Autocirc
-  34: Avgasar & Renar
-  35: B Bodin Bygg & Byggledning AB
-  36: B el & tele
-  37: BBM
-  38: BBS Stål & Metaller
-  39: BDS
-  40: BLT
-  41: BOA
-  42: BRA
-  43: BST
-  44: BUFAB
-  45: BabyBjörn
-  46: Babylon Pizzeria
-  47: Bad & Varme
-  48: Barometern
-  49: Bauhaus
-  50: Beans in Cup
-  51: Beijer Byggmaterial
-  52: Bemanningspoolen
-  53: Bendt Bil
-  54: Bergkvarabuss
-  55: Best Western
-  56: Betonghål
-  57: Betongkompaniet i Stockholm AB
-  58: Betongteknik i Mälardalen AB
-  59: Bevego
-  60: Billy & Dennis
-  61: Bioms AB
-  62: Biotage
-  63: Bjäre Chips
-  64: Björklunds Kafferosteri
-  65: Björklunds Kafferosteri tekst
-  66: Bloms AB
-  67: Blyckert & Börjesson Måleri AB
-  68: Blåkläder
-  69: BoViva
-  70: Boards
-  71: Bofast
-  72: Bogstedt Bil
-  73: Boozt
-  74: Borgstena of Sweden
-  75: Borohus
-  76: Borås MurningsArbeten
-  77: Borås Stad
-  78: Borås Tidning
-  79: Borås Truckservice
-  80: Bostjärnan
-  81: Brandtown
-  82: Bravida
-  83: Bredbandsval.se
-  84: Bricmate
-  85: Brion
-  86: Brixo
-  87: Brunna Schakt
-  88: Bygg Construct
-  89: Bygg-Bröderna S AB
-  90: Böda Sand
-  91: Börjessons
-  92: C Land Logistics
-  93: CA Fastigheter
-  94: CLN Athletics
-  95: CS Maskin
-  96: CTC Värmepumpar
-  97: CWS
-  98: Carpenter
-  99: Castellum
-  100: Cequred Security
-  101: Cernera
-  102: Cityfastigheter
-  103: ClickitUp
-  104: Clinton
-  105: Coca Cola
-  106: Condesign
-  107: Conductus AB
-  108: Coop
-  109: Coor
-  110: Corpay
-  111: Craft
-  112: Craft tekst
-  113: Craftor
-  114: Cramo
-  115: Crowe
-  116: Cuebid
-  117: Cupra
-  118: DOXA
-  119: DS Smith
-  120: Dahl
-  121: Dahl logo
-  122: Daloc
-  123: Demo Group
-  124: Dick Johansson Skogstransporter AB
-  125: Din Maskin
-  126: Dinner 22
-  127: Direct Larm & Lås
-  128: Djurö Grävmaskiner AB
-  129: Domtrappkällaren
-  130: DynaMate
-  131: Däck Partner
-  132: EA
-  133: EAB
-  134: EB Road Cargo
-  135: EFAB
-  136: EL & Energioptimering
-  137: EL Man
-  138: EL VVS
-  139: ELAK
-  140: EXE Måleri
-  141: EXIN
-  142: Easy Coffee
-  143: Easypartner
-  144: Effektiv
-  145: Ekerum Resort Öland
-  146: Eksjöhus
-  147: El Linjen AB
-  148: Electrolux
-  149: Eleda
-  150: Elektrikerna i Nybro
-  151: Elektriske Svea
-  152: Elgiganten
-  153: Elgrossisten Holmro
-  154: Elitdecor
-  155: Elite Grand Hotel
-  156: Elkejdan
-  157: Ellos
-  158: Ellénius Buss
-  159: Elon
-  160: Enkla Elbolaget
-  161: Ergoseat
-  162: Ernst Textil
-  163: Escape Travel
-  164: Estrella
-  165: Exceed
-  166: Exiso
-  167: Extra
-  168: FR Fastighetsservice
-  169: FSAB
-  170: FVB
-  171: Falkeskog
-  172: Fameco
-  173: Fat21
-  174: Fem Hjärtan Fastigheter
-  175: Finlarm
-  176: Finnveden NU
-  177: Finnvedens Expresstransport
-  178: Finnvedens Trafikskola
-  179: Finnvedsbostäder
-  180: Flinks
-  181: Flytgolv i Landskrona AB
-  182: Folie & Papper
-  183: Forenede Care
-  184: Formenta
-  185: Forza football
-  186: Fotriktigt
-  187: Four Office
-  188: Frank Bistro
-  189: Fransson Bygg AB
-  190: Frejs
-  191: Front Fasadgruppen
-  192: Fyhrs
-  193: GA
-  194: GBJ bygg
-  195: GDL
-  196: GE Bäst
-  197: GN Logistcs
-  198: GN Transport
-  199: GOTSAFE
-  200: Gaismeister AB
-  201: Garo
-  202: Getinge
-  203: Getinge logo
-  204: Gevab Group
-  205: GipsProffsen
-  206: Gjuteriteknik
-  207: Gjuteriteknik tekst
-  208: Glimstedt
-  209: Golvabia
-  210: Good Advice
-  211: Gorilla Glue
-  212: Gothia Cup
-  213: Guldfågeln
-  214: Gunnars Maskiner
-  215: Gäsene Mejeri
-  216: Göteborgs Metallpartier
-  217: HECO
-  218: HFAB
-  219: HJT Service AB
-  220: HSE
-  221: HTC Högtryckscenter i Väst AB
-  222: Habo
-  223: Halmstad
-  224: Halmstad Kakelhus
-  225: Halmstad stenhus
-  226: Hammarby Construction AB
-  227: Hammarstedt's Kyl & Inneklimat AB
-  228: Handelsbanken
-  229: HangOn
-  230: Hanninge Terrazzology AB
-  231: Hansson Kapell AB
-  232: Harry Berglund Förvaltnings AB
-  233: Herrljunga cider
-  234: Hestra
-  235: Hisstech AB
-  236: Hitachi Energy
-  237: Hogbergs Buss AB Uppsala
-  238: Holmbergs
-  239: Holmen
-  240: HomeMaid
-  241: Hotel Carlshamn
-  242: Hotel Plaza
-  243: Hugo
-  244: Hulten
-  245: Humidus
-  246: Husvagns Expo
-  247: Hydroscand
-  248: Hygienteknik
-  249: Hylte
-  250: Hyrex
-  251: Härryda Karlsson
-  252: Hållanders Sägverk AB
-  253: Högberg Buss AB
-  254: Högbergs Buss AB
-  255: ICA
-  256: ICA Bomben
-  257: ICA City
-  258: ICA Kvantum
-  259: ICA Supermarket
-  260: IGS Capital
-  261: IP Produkter AB
-  262: IR
-  263: ITS
-  264: Idealtryck
-  265: Ifmetall
-  266: InfoPrint
-  267: Infometric
-  268: Infoservice
-  269: InfraCom
-  270: Infrakraft
-  271: Inneklimat Värnamo
-  272: Input Interiör
-  273: Intersport
-  274: Isobetong
-  275: Ivar Svensson Trafik AB
-  276: J&S Markservice AB
-  277: JOCR Media
-  278: Jisotech
-  279: JoelJolina
-  280: Jonab
-  281: Jour
-  282: Jowema
-  283: Jump Yard
-  284: Järletoft Bygg
-  285: Järngrinden
-  286: K-Bygg
-  287: K-G Paulssons Bär & Grönsaker AB
-  288: K-V Bygg
-  289: K-vagnen
-  290: KAMA
-  291: KYL Teknik
-  292: Kadesjös
-  293: Kalmar Kuvert
-  294: Kalmar Sotning & Ventilation AB
-  295: Kappahl
-  296: Kappex AB
-  297: Karaten
-  298: Klara
-  299: Klarin´s Rör
-  300: Konradssons Kakel
-  301: Konst Smide
-  302: Kopparberg
-  303: Kranpunkten
-  304: Kristina
-  305: Kundpartner
-  306: Kvarteret GIRAFFEN
-  307: Kvibergs Överskottslager AB
-  308: Kvik
-  309: Kvinner For Fred
-  310: LF Invest AB
-  311: LGL Construction
-  312: LGP Byggservice AB
-  313: LK Buss AB
-  314: LKQ Atracco
-  315: LM Stålteknik AB
-  316: Lantmännen Agroetanol
-  317: Larsson
-  318: Larsson & Karlsson Elinstallationer AB
-  319: Leads
-  320: Leijon
-  321: Lendo
-  322: Lesjöfors
-  323: Let´s Create
-  324: Libergs Sweden AB
-  325: Liljedahl
-  326: Lillebil
-  327: Lindab
-  328: Lindbytvätten
-  329: Little Italy Barbershop
-  330: Locads
-  331: Logomattan
-  332: Loows Måleri
-  333: Lotus Hotel Group
-  334: Lundagrossisten
-  335: Lundby Plåt
-  336: Lundebergs Fastigheter
-  337: Lundebergs Fastigheter logo
-  338: Lundqvist EL
-  339: Luthagens Livs ICA
-  340: Lyckholms Elektriska
-  341: Länsförsäkringar
-  342: Lönneberga
-  343: MABI
-  344: MAX
-  345: MBF AB
-  346: MCR
-  347: MFF Play
-  348: MG
-  349: MIN
-  350: MMG Marine AB
-  351: MOH-Maya
-  352: Maksimer
-  353: Malaco
-  354: Malmqvist
-  355: Marielunds VVS
-  356: Markentreprenad
-  357: Maskin & Verktyg
-  358: Mataki
-  359: Mattr
-  360: Maxi
-  361: Maxxis Tyres
-  362: McDonald's
-  363: Mediaflow
-  364: Mella el
-  365: Mellby Gård
-  366: Mellinger Bil
-  367: Mellinger Fastigheter
-  368: Mercedes
-  369: Meritum
-  370: Metodgolv
-  371: Mitsubishi
-  372: Mix Megapol
-  373: Mizuno
-  374: Mobill
-  375: Mocca Deli
-  376: Molins
-  377: Multi bygg
-  378: Musiklageret
-  379: Muskelcentrum
-  380: Månsson Rör
-  381: NLY Man
-  382: NP Nilsson
-  383: NSFastigheter
-  384: NSgastro
-  385: NTEX
-  386: Nearyou
-  387: Nike logo
-  388: Nike tekst
-  389: Nivika
-  390: NordVPN
-  391: Nordea
-  392: Norden
-  393: NordiQ Group
-  394: Nordic Wellness
-  395: Nordquist & Järnvall
-  396: Nordström Advokater
-  397: Norima
-  398: Norrvidinge
-  399: Norteam
-  400: Norén & Lindholm
-  401: Notar
-  402: Nybloms
-  403: Nybyggar'n AB
-  404: Nyfosa
-  405: Näbo Bygg
-  406: Nöjd
-  407: OCAB
-  408: OHLSSONS
-  409: OWB
-  410: Oatly
-  411: Office
-  412: Olle Lind Golv AB
-  413: One More
-  414: OnePartnerGroup
-  415: Optimera
-  416: Oscar Hansson VVS
-  417: Ottosson Truck
-  418: Ove
-  419: PEAB
-  420: PULS
-  421: PacsOn
-  422: Panasonic
-  423: Parker
-  424: Paroy
-  425: Passera
-  426: Peas of Heaven
-  427: Pepsi
-  428: Picadeli
-  429: Pinewood
-  430: Platinumcars
-  431: Plåtkompaniet
-  432: Pontuz Löfgren
-  433: Port Du Soleil
-  434: Power Automation
-  435: Pre Zero
-  436: PreFast
-  437: Prefabsystem
-  438: Presto
-  439: Prison Island
-  440: Projob
-  441: Pulsen
-  442: Puma
-  443: Puma tekst
-  444: QTF
-  445: RO-gruppen
-  446: Railway System
-  447: Ramirent
-  448: Ramo
-  449: Rasta
-  450: Ravema
-  451: Redeye
-  452: Reformhus
-  453: Rejlers
-  454: Rendo
-  455: Renova
-  456: Renta
-  457: Retur Papper Centralen
-  458: Revisorsgruppen
-  459: Rexel
-  460: Rimeda
-  461: Rivare
-  462: Road Rental
-  463: Rollup
-  464: Rollup-Kungen
-  465: Ronneby Brunn
-  466: Roxtec
-  467: Rudholm Group
-  468: Ryds Bilglas
-  469: SAB
-  470: SDX
-  471: SE sol
-  472: SEFAB
-  473: SGA
-  474: SHARP
-  475: SKAB
-  476: SKYLT & NEON
-  477: SRM Stål & Rörmontage
-  478: STARK
-  479: STC
-  480: SVB
-  481: SVEA
-  482: SafeScaff
-  483: Salboheds
-  484: Saljfast
-  485: Sandahls
-  486: Sanering
-  487: Sanero
-  488: Sankt Jorgen Park
-  489: Saschas Familjearbete AB
-  490: Scandic
-  491: Scania
-  492: SealEco
-  493: Sefina Pantbank
-  494: Select
-  495: Select logo
-  496: Seniorarbeten
-  497: Serneke
-  498: Serve You
-  499: Sfär
-  500: Silvent
-  501: Simplicity
-  502: Sirius
-  503: Sjömarkens Svets och Smide AB
-  504: Skolon
-  505: Skrot Centralen
-  506: Skrotfrag
-  507: Skubbet
-  508: Skylt-Reklam
-  509: Skyltproduktion
-  510: Smart Rail
-  511: Snickeriportalen
-  512: Social Zense
-  513: Solel
-  514: Solhemsgruppen
-  515: Sollentuna Emballagehantering AB
-  516: Sparbanken
-  517: Sparbanken tekst
-  518: Spolpatrullen
-  519: Sport Vision
-  520: Sportringen
-  521: Sportway
-  522: Sportway logo
-  523: Stadax
-  524: Stadium
-  525: Stadsporten
-  526: Stayhot
-  527: Steelpro
-  528: Stema
-  529: Stena
-  530: Stena Fastigheter
-  531: Stena Recycling
-  532: Stena Stål
-  533: Stenfastigheter
-  534: StensbergsEl AB
-  535: Stigma
-  536: Storkökside
-  537: Stranda
-  538: Städ & Fönsterservice
-  539: Ståthøga Verkstad AB
-  540: Sultan Kolgrill & Meze
-  541: Sundström Safety
-  542: Sundtorps Gård
-  543: Super Dæk
-  544: SveBag
-  545: Svenska Höjdbolaget
-  546: Swedbank
-  547: Sydställningar
-  548: Sydsvenskan
-  549: Syncify
-  550: Säkra
-  551: Säljfast
-  552: Söderbergs Bil
-  553: Södertörns Däckservice AB
-  554: Sölvesborgs kommun
-  555: TB Printsolutions
-  556: TCL
-  557: TF Bank
-  558: TICTAC
-  559: TISAB
-  560: TISAB Tak
-  561: TL Bygg
-  562: TSG
-  563: TTM
-  564: Tammp
-  565: Tarkett
-  566: Team "G" EL & VVS AB
-  567: Techno Skruv
-  568: Tegnanders Fastighets AB
-  569: Teknos
-  570: TekoTryck
-  571: Tele2
-  572: Teleoption
-  573: Telexia
-  574: Telink
-  575: The Central Bar
-  576: The Mobile Life
-  577: Thermia
-  578: Thermia Värmepumpar
-  579: Tillmobil
-  580: Toarps Plåtslageri AB
-  581: Torrbollen Home
-  582: Toveksbil VW
-  583: Toyo Tires
-  584: Tranpenad
-  585: Transschakt
-  586: Trebolit
-  587: Triller Mat & Bröd
-  588: Troax
-  589: Truecaller
-  590: Tryck Cenrtum
-  591: Tujo AB
-  592: Turbo
-  593: Tvättex
-  594: Tången
-  595: UCS IT Solutions
-  596: UFS
-  597: UGSAB
-  598: Umbro
-  599: Unibet
-  600: Unisport
-  601: Uponor
-  602: Upplands Bilforum AB
-  603: Uppsala Brygghus
-  604: Uppsala Handelsstål
-  605: Uppsala Kommun
-  606: Upsala GK
-  607: VMAR
-  608: VVS Fålhagen
-  609: Vaksala Måleri
-  610: Vaksala Måleri logo
-  611: Varbergs Stadshotell & Asia Spa
-  612: Varis Förvaltning
-  613: Ventex Entreprenad AB
-  614: VicApta
-  615: Victoria
-  616: Villalivet
-  617: Vinga Group
-  618: Vinnergi
-  619: Voky
-  620: Volkswagen
-  621: VärnaBo Fastigheter AB
-  622: Värnamo Energi
-  623: Värnamo Kommun
-  624: Värnamo Nyheter
-  625: Västerås Takentreprenad AB
-  626: Västkust Stugan
-  627: Västtak
-  628: WD-40
-  629: WebROPol
-  630: Weber
-  631: Wellness Studio
-  632: Werna Sportfiske AB
-  633: West Timber
-  634: Wilson Creative
-  635: Wilssons
-  636: Winpos
-  637: WinsthGolv & Kakel
-  638: Wohlins
-  639: Work System
-  640: XL Bygg
-  641: Yaskawa
-  642: Zinkteknik
-  643: advokatbyrån novum
-  644: amber advokater
-  645: amicus
-  646: axelssons
-  647: bemt
-  648: duoplåt Plåtslageri
-  649: eQuality Fönster AB
-  650: easyform
-  651: enigma
-  652: everbrand sweden.
-  653: exakta
-  654: friskis
-  655: ggmgastro
-  656: gibon
-  657: ginatricot
-  658: granitor
-  659: iLoq
-  660: inkClub
-  661: j:retail
-  662: kreativ teknik
-  663: kvdbil
-  664: marching on together ab
-  665: merinfo
-  666: milael
-  667: nominit
-  668: sesol
-  669: visolve
-  670: Åke Ekstrand Byggnads
-  671: Ångtvättbilen
-  672: Årsta tak
-  673: Östras Stenungsbageriet
-  674: Øresundsbron
-  675: Østuna Shackt & Transport AB
+  0: .DOT
+  1: 3M Peltor
+  2: 3stepIT
+  3: 4 Office
+  4: 52bones
+  5: AB Karl Hedin
+  6: ABB
+  7: AF Gruppen
+  8: AGB Service
+  9: AH Sport & Business
+  10: AHNVIKS
+  11: AJ Produkter
+  12: ALT
+  13: AVIX
+  14: Abri
+  15: Adidas logo
+  16: Adidas tekst
+  17: Advokatfirman Landerdahl
+  18: Ahlberg bil
+  19: AllOffice
+  20: AllTransport
+  21: Alvelid Engineering
+  22: Alvinssons AB
+  23: Amokabel
+  24: ApQ
+  25: Aprofit SE
+  26: Arbesko
+  27: Arken
+  28: Aros Kapital
+  29: Asfalt i Göteborg AB
+  30: Asplunds Bygg
+  31: Assemblin
+  32: Audicom Pendax
+  33: Auktionsbyrån Effecta AB
+  34: Autocirc
+  35: Avgasar & Renar
+  36: B Bodin Bygg & Byggledning AB
+  37: B el & tele
+  38: BBM
+  39: BBS Stål & Metaller
+  40: BDS
+  41: BLT
+  42: BOA
+  43: BRA
+  44: BST
+  45: BUFAB
+  46: BabyBjörn
+  47: Babylon Pizzeria
+  48: Bad & Varme
+  49: Barometern
+  50: Bauhaus
+  51: Beans in Cup
+  52: Beijer Byggmaterial
+  53: Bemanningspoolen
+  54: Bendt Bil
+  55: Bergkvarabuss
+  56: Best Western
+  57: Betonghål
+  58: Betongkompaniet i Stockholm AB
+  59: Betongteknik i Mälardalen AB
+  60: Bevego
+  61: Billy & Dennis
+  62: Bioms AB
+  63: Biotage
+  64: Bjäre Chips
+  65: Björklunds Kafferosteri
+  66: Björklunds Kafferosteri tekst
+  67: Bloms AB
+  68: Blyckert & Börjesson Måleri AB
+  69: Blåkläder
+  70: BoViva
+  71: Boards
+  72: Bofast
+  73: Bogstedt Bil
+  74: Boozt
+  75: Borgstena of Sweden
+  76: Borohus
+  77: Borås MurningsArbeten
+  78: Borås Stad
+  79: Borås Tidning
+  80: Borås Truckservice
+  81: Bostjärnan
+  82: Brandtown
+  83: Bravida
+  84: Bredbandsval.se
+  85: Bricmate
+  86: Brion
+  87: Brixo
+  88: Brunna Schakt
+  89: Bygg Construct
+  90: Bygg-Bröderna S AB
+  91: Böda Sand
+  92: Börjessons
+  93: C Land Logistics
+  94: CA Fastigheter
+  95: CLN Athletics
+  96: CS Maskin
+  97: CTC Värmepumpar
+  98: CWS
+  99: Carpenter
+  100: Castellum
+  101: Cequred Security
+  102: Cernera
+  103: Cityfastigheter
+  104: ClickitUp
+  105: Clinton
+  106: Coca Cola
+  107: Condesign
+  108: Conductus AB
+  109: Coop
+  110: Coor
+  111: Corpay
+  112: Craft
+  113: Craft tekst
+  114: Craftor
+  115: Cramo
+  116: Crowe
+  117: Cuebid
+  118: Cupra
+  119: DOXA
+  120: DS Smith
+  121: Dahl
+  122: Dahl logo
+  123: Daloc
+  124: Demo Group
+  125: Dick Johansson Skogstransporter AB
+  126: Din Maskin
+  127: Dinner 22
+  128: Direct Larm & Lås
+  129: Djurö Grävmaskiner AB
+  130: Domtrappkällaren
+  131: DynaMate
+  132: Däck Partner
+  133: EA
+  134: EAB
+  135: EB Road Cargo
+  136: EFAB
+  137: EL & Energioptimering
+  138: EL Man
+  139: EL VVS
+  140: ELAK
+  141: EXE Måleri
+  142: EXIN
+  143: Easy Coffee
+  144: Easypartner
+  145: Effektiv
+  146: Ekerum Resort Öland
+  147: Eksjöhus
+  148: El Linjen AB
+  149: Electrolux
+  150: Eleda
+  151: Elektrikerna i Nybro
+  152: Elektriske Svea
+  153: Elgiganten
+  154: Elgrossisten Holmro
+  155: Elitdecor
+  156: Elite Grand Hotel
+  157: Elkejdan
+  158: Ellos
+  159: Ellénius Buss
+  160: Elon
+  161: Enkla Elbolaget
+  162: Ergoseat
+  163: Ernst Textil
+  164: Escape Travel
+  165: Estrella
+  166: Exceed
+  167: Exiso
+  168: Extra
+  169: FR Fastighetsservice
+  170: FSAB
+  171: FVB
+  172: Falkeskog
+  173: Fameco
+  174: Fat21
+  175: Fem Hjärtan Fastigheter
+  176: Finlarm
+  177: Finnveden NU
+  178: Finnvedens Expresstransport
+  179: Finnvedens Trafikskola
+  180: Finnvedsbostäder
+  181: Flinks
+  182: Flytgolv i Landskrona AB
+  183: Folie & Papper
+  184: Forenede Care
+  185: Formenta
+  186: Forza football
+  187: Fotriktigt
+  188: Four Office
+  189: Frank Bistro
+  190: Fransson Bygg AB
+  191: Frejs
+  192: Front Fasadgruppen
+  193: Fyhrs
+  194: GA
+  195: GBJ bygg
+  196: GDL
+  197: GE Bäst
+  198: GN Logistcs
+  199: GN Transport
+  200: GOTSAFE
+  201: Gaismeister AB
+  202: Garo
+  203: Getinge
+  204: Getinge logo
+  205: Gevab Group
+  206: GipsProffsen
+  207: Gjuteriteknik
+  208: Gjuteriteknik tekst
+  209: Glimstedt
+  210: Golvabia
+  211: Good Advice
+  212: Gorilla Glue
+  213: Gothia Cup
+  214: Guldfågeln
+  215: Gunnars Maskiner
+  216: Gäsene Mejeri
+  217: Göteborgs Metallpartier
+  218: HECO
+  219: HFAB
+  220: HJT Service AB
+  221: HSE
+  222: HTC Högtryckscenter i Väst AB
+  223: Habo
+  224: Halmstad
+  225: Halmstad Kakelhus
+  226: Halmstad stenhus
+  227: Hammarby Construction AB
+  228: Hammarstedt's Kyl & Inneklimat AB
+  229: Handelsbanken
+  230: HangOn
+  231: Hanninge Terrazzology AB
+  232: Hansson Kapell AB
+  233: Harry Berglund Förvaltnings AB
+  234: Herrljunga cider
+  235: Hestra
+  236: Hisstech AB
+  237: Hitachi Energy
+  238: Hogbergs Buss AB Uppsala
+  239: Holmbergs
+  240: Holmen
+  241: HomeMaid
+  242: Hotel Carlshamn
+  243: Hotel Plaza
+  244: Hugo
+  245: Hulten
+  246: Humidus
+  247: Husvagns Expo
+  248: Hydroscand
+  249: Hygienteknik
+  250: Hylte
+  251: Hyrex
+  252: Härryda Karlsson
+  253: Hållanders Sägverk AB
+  254: Högberg Buss AB
+  255: Högbergs Buss AB
+  256: ICA
+  257: ICA Bomben
+  258: ICA City
+  259: ICA Kvantum
+  260: ICA Supermarket
+  261: IGS Capital
+  262: IP Produkter AB
+  263: IR
+  264: ITS
+  265: Idealtryck
+  266: Ifmetall
+  267: InfoPrint
+  268: Infometric
+  269: Infoservice
+  270: InfraCom
+  271: Infrakraft
+  272: Inneklimat Värnamo
+  273: Input Interiör
+  274: Intersport
+  275: Isobetong
+  276: Ivar Svensson Trafik AB
+  277: J&S Markservice AB
+  278: JOCR Media
+  279: Jisotech
+  280: JoelJolina
+  281: Jonab
+  282: Jour
+  283: Jowema
+  284: Jump Yard
+  285: Järletoft Bygg
+  286: Järngrinden
+  287: K-Bygg
+  288: K-G Paulssons Bär & Grönsaker AB
+  289: K-V Bygg
+  290: K-vagnen
+  291: KAMA
+  292: KYL Teknik
+  293: Kadesjös
+  294: Kalmar Kuvert
+  295: Kalmar Sotning & Ventilation AB
+  296: Kappahl
+  297: Kappex AB
+  298: Karaten
+  299: Klara
+  300: Klarin´s Rör
+  301: Konradssons Kakel
+  302: Konst Smide
+  303: Kopparberg
+  304: Kranpunkten
+  305: Kristina
+  306: Kundpartner
+  307: Kvarteret GIRAFFEN
+  308: Kvibergs Överskottslager AB
+  309: Kvik
+  310: Kvinner For Fred
+  311: LF Invest AB
+  312: LGL Construction
+  313: LGP Byggservice AB
+  314: LK Buss AB
+  315: LKQ Atracco
+  316: LM Stålteknik AB
+  317: Lantmännen Agroetanol
+  318: Larsson
+  319: Larsson & Karlsson Elinstallationer AB
+  320: Leads
+  321: Leijon
+  322: Lendo
+  323: Lesjöfors
+  324: Let´s Create
+  325: Libergs Sweden AB
+  326: Liljedahl
+  327: Lillebil
+  328: Lindab
+  329: Lindbytvätten
+  330: Little Italy Barbershop
+  331: Locads
+  332: Logomattan
+  333: Loows Måleri
+  334: Lotus Hotel Group
+  335: Lundagrossisten
+  336: Lundby Plåt
+  337: Lundebergs Fastigheter
+  338: Lundebergs Fastigheter logo
+  339: Lundqvist EL
+  340: Luthagens Livs ICA
+  341: Lyckholms Elektriska
+  342: Länsförsäkringar
+  343: Lönneberga
+  344: MABI
+  345: MAX
+  346: MBF AB
+  347: MCR
+  348: MFF Play
+  349: MG
+  350: MIN
+  351: MMG Marine AB
+  352: MOH-Maya
+  353: Maksimer
+  354: Malaco
+  355: Malmqvist
+  356: Marielunds VVS
+  357: Markentreprenad
+  358: Maskin & Verktyg
+  359: Mataki
+  360: Mattr
+  361: Maxi
+  362: Maxxis Tyres
+  363: McDonald's
+  364: Mediaflow
+  365: Mella el
+  366: Mellby Gård
+  367: Mellinger Bil
+  368: Mellinger Fastigheter
+  369: Mercedes
+  370: Meritum
+  371: Metodgolv
+  372: Mitsubishi
+  373: Mix Megapol
+  374: Mizuno
+  375: Mobill
+  376: Mocca Deli
+  377: Molins
+  378: Multi bygg
+  379: Musiklageret
+  380: Muskelcentrum
+  381: Månsson Rör
+  382: NLY Man
+  383: NP Nilsson
+  384: NSFastigheter
+  385: NSgastro
+  386: NTEX
+  387: Nearyou
+  388: Nike logo
+  389: Nike tekst
+  390: Nivika
+  391: NordVPN
+  392: Nordea
+  393: Norden
+  394: NordiQ Group
+  395: Nordic Wellness
+  396: Nordquist & Järnvall
+  397: Nordström Advokater
+  398: Norima
+  399: Norrvidinge
+  400: Norteam
+  401: Norén & Lindholm
+  402: Notar
+  403: Nybloms
+  404: Nybyggar'n AB
+  405: Nyfosa
+  406: Näbo Bygg
+  407: Nöjd
+  408: OCAB
+  409: OHLSSONS
+  410: OWB
+  411: Oatly
+  412: Office
+  413: Olle Lind Golv AB
+  414: One More
+  415: OnePartnerGroup
+  416: Optimera
+  417: Oscar Hansson VVS
+  418: Ottosson Truck
+  419: Ove
+  420: PEAB
+  421: PULS
+  422: PacsOn
+  423: Panasonic
+  424: Parker
+  425: Paroy
+  426: Passera
+  427: Peas of Heaven
+  428: Pepsi
+  429: Picadeli
+  430: Pinewood
+  431: Platinumcars
+  432: Plåtkompaniet
+  433: Pontuz Löfgren
+  434: Port Du Soleil
+  435: Power Automation
+  436: Pre Zero
+  437: PreFast
+  438: Prefabsystem
+  439: Presto
+  440: Prison Island
+  441: Projob
+  442: Pulsen
+  443: Puma
+  444: Puma tekst
+  445: QTF
+  446: RO-gruppen
+  447: Railway System
+  448: Ramirent
+  449: Ramo
+  450: Rasta
+  451: Ravema
+  452: Redeye
+  453: Reformhus
+  454: Rejlers
+  455: Rendo
+  456: Renova
+  457: Renta
+  458: Retur Papper Centralen
+  459: Revisorsgruppen
+  460: Rexel
+  461: Rimeda
+  462: Rivare
+  463: Road Rental
+  464: Rollup
+  465: Rollup-Kungen
+  466: Ronneby Brunn
+  467: Roxtec
+  468: Rudholm Group
+  469: Ryds Bilglas
+  470: SAB
+  471: SDX
+  472: SE sol
+  473: SEFAB
+  474: SGA
+  475: SHARP
+  476: SKAB
+  477: SKYLT & NEON
+  478: SRM Stål & Rörmontage
+  479: STARK
+  480: STC
+  481: SVB
+  482: SVEA
+  483: SafeScaff
+  484: Salboheds
+  485: Saljfast
+  486: Sandahls
+  487: Sanering
+  488: Sanero
+  489: Sankt Jorgen Park
+  490: Saschas Familjearbete AB
+  491: Scandic
+  492: Scania
+  493: SealEco
+  494: Sefina Pantbank
+  495: Select
+  496: Select logo
+  497: Seniorarbeten
+  498: Serneke
+  499: Serve You
+  500: Sfär
+  501: Silvent
+  502: Simplicity
+  503: Sirius
+  504: Sjömarkens Svets och Smide AB
+  505: Skolon
+  506: Skrot Centralen
+  507: Skrotfrag
+  508: Skubbet
+  509: Skylt-Reklam
+  510: Skyltproduktion
+  511: Smart Rail
+  512: Snickeriportalen
+  513: Social Zense
+  514: Solel
+  515: Solhemsgruppen
+  516: Sollentuna Emballagehantering AB
+  517: Sparbanken
+  518: Sparbanken tekst
+  519: Spolpatrullen
+  520: Sport Vision
+  521: Sportringen
+  522: Sportway
+  523: Sportway logo
+  524: Stadax
+  525: Stadium
+  526: Stadsporten
+  527: Stayhot
+  528: Steelpro
+  529: Stema
+  530: Stena
+  531: Stena Fastigheter
+  532: Stena Recycling
+  533: Stena Stål
+  534: Stenfastigheter
+  535: StensbergsEl AB
+  536: Stigma
+  537: Storkökside
+  538: Stranda
+  539: Städ & Fönsterservice
+  540: Ståthøga Verkstad AB
+  541: Sultan Kolgrill & Meze
+  542: Sundström Safety
+  543: Sundtorps Gård
+  544: Super Dæk
+  545: SveBag
+  546: Svenska Höjdbolaget
+  547: Swedbank
+  548: Sydställningar
+  549: Sydsvenskan
+  550: Syncify
+  551: Säkra
+  552: Säljfast
+  553: Söderbergs Bil
+  554: Södertörns Däckservice AB
+  555: Sölvesborgs kommun
+  556: TB Printsolutions
+  557: TCL
+  558: TF Bank
+  559: TICTAC
+  560: TISAB
+  561: TISAB Tak
+  562: TL Bygg
+  563: TSG
+  564: TTM
+  565: Tammp
+  566: Tarkett
+  567: Team "G" EL & VVS AB
+  568: Techno Skruv
+  569: Tegnanders Fastighets AB
+  570: Teknos
+  571: TekoTryck
+  572: Tele2
+  573: Teleoption
+  574: Telexia
+  575: Telink
+  576: The Central Bar
+  577: The Mobile Life
+  578: Thermia
+  579: Thermia Värmepumpar
+  580: Tillmobil
+  581: Toarps Plåtslageri AB
+  582: Torrbollen Home
+  583: Toveksbil VW
+  584: Toyo Tires
+  585: Tranpenad
+  586: Transschakt
+  587: Trebolit
+  588: Triller Mat & Bröd
+  589: Troax
+  590: Truecaller
+  591: Tryck Cenrtum
+  592: Tujo AB
+  593: Turbo
+  594: Tvättex
+  595: Tången
+  596: UCS IT Solutions
+  597: UFS
+  598: UGSAB
+  599: Umbro
+  600: Unibet
+  601: Unisport
+  602: Uponor
+  603: Upplands Bilforum AB
+  604: Uppsala Brygghus
+  605: Uppsala Handelsstål
+  606: Uppsala Kommun
+  607: Upsala GK
+  608: VMAR
+  609: VVS Fålhagen
+  610: Vaksala Måleri
+  611: Vaksala Måleri logo
+  612: Varbergs Stadshotell & Asia Spa
+  613: Varis Förvaltning
+  614: Ventex Entreprenad AB
+  615: VicApta
+  616: Victoria
+  617: Villalivet
+  618: Vinga Group
+  619: Vinnergi
+  620: Voky
+  621: Volkswagen
+  622: VärnaBo Fastigheter AB
+  623: Värnamo Energi
+  624: Värnamo Kommun
+  625: Värnamo Nyheter
+  626: Västerås Takentreprenad AB
+  627: Västkust Stugan
+  628: Västtak
+  629: WD-40
+  630: WebROPol
+  631: Weber
+  632: Wellness Studio
+  633: Werna Sportfiske AB
+  634: West Timber
+  635: Wilson Creative
+  636: Wilssons
+  637: Winpos
+  638: WinsthGolv & Kakel
+  639: Wohlins
+  640: Work System
+  641: XL Bygg
+  642: Yaskawa
+  643: Zinkteknik
+  644: advokatbyrån novum
+  645: amber advokater
+  646: amicus
+  647: axelssons
+  648: bemt
+  649: duoplåt Plåtslageri
+  650: eQuality Fönster AB
+  651: easyform
+  652: enigma
+  653: everbrand sweden.
+  654: exakta
+  655: friskis
+  656: ggmgastro
+  657: gibon
+  658: ginatricot
+  659: granitor
+  660: iLoq
+  661: inkClub
+  662: j:retail
+  663: kreativ teknik
+  664: kvdbil
+  665: marching on together ab
+  666: merinfo
+  667: milael
+  668: nominit
+  669: sesol
+  670: visolve
+  671: Åke Ekstrand Byggnads
+  672: Ångtvättbilen
+  673: Årsta tak
+  674: Östras Stenungsbageriet
+  675: Øresundsbron
+  676: Østuna Shackt & Transport AB
