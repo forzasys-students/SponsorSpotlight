@@ -53,4 +53,4 @@ python inference.py <mode> <path>
 
 ## Example Detection
 
-![Example Detection](example-detection.gif)
+![Example Detection](example-detection1.gif)
