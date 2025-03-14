@@ -5,20 +5,18 @@ data: /home/mehdihou/D1/YOLO-Train/Train/config_obb.yaml
 epochs: 200
 time: null
 patience: 50
-batch: 50
+batch: 30
 imgsz: 1280
 save: true
 save_period: 20
 cache: false
 device:
-- 1
 - 2
 - 3
-- 4
-- 5
+- 7
 workers: 8
 project: Logo_exposure
-name: train13
+name: train17
 exist_ok: false
 pretrained: true
 optimizer: auto
@@ -30,7 +28,7 @@ rect: false
 cos_lr: false
 close_mosaic: 10
 resume: false
-amp: false
+amp: true
 fraction: 1.0
 profile: false
 freeze: null
@@ -108,4 +106,4 @@ erasing: 0.4
 crop_fraction: 1.0
 cfg: null
 tracker: botsort.yaml
-save_dir: Logo_exposure/train13
+save_dir: Logo_exposure/train17
