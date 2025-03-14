@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SponsorSpotlight</title>
+    <link rel="stylesheet" href="../static/css/style.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>SponsorSpotlight</h1>
+
+    <!-- Input URL -->
+    <div class="input-box">
+        <label for="videoUrl">M3U8 Playlist URL:</label>
+        <input type="text" id="videoUrl" value="">
+        <button onclick="loadVideo()">Fetch Video</button>
+    </div>
+
+    <!-- Video Player -->
+    <video id="videoPlayer" controls></video>
+</div>
+
+<script src="../static/js/script.js"></script> 
+</body>
+</html>
