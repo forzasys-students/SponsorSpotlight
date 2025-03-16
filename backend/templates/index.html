@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SponsorSpotlight</title>
+    <link rel="stylesheet" href="../static/css/style.css"> 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>SponsorSpotlight</h1>
+
+        <!-- Input form -->
+    <form id="uploadForm" action="/", method="post" enctype="multipart/form-data">
+        <label for="mediaFile">Choose file:</label>
+        <input type="file" name="mediaFile" accept="video/*,image/*">
+
+        <label for="videoUrl">M3U8 Playlist URL:</label>
+        <input type="text" id="videoUrl" name="videoUrl">
+        <button type="submit">Submit</button>
+    </form>
+
+    <p id="errorMsg" style="color: red;"></p>
+
+    <!-- Media Player -->
+    <video id="videoPlayer" controls style="display: none;"></video>
+    <img id="imageView" style="display: none;">
+</div>
+
+<script src="../static/js/script.js"></script> 
+</body>
+</html>
