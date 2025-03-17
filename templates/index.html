@@ -1,28 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SponsorSpotlight</title>
-    <link rel="stylesheet" href="../static/css/style.css"> 
+    <link rel="stylesheet" href="../static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
+
 <body>
+    <div class="container">
+        <h1>⚽ SponsorSpotlight ⚽</h1>
 
-<div class="container">
-    <h1>SponsorSpotlight</h1>
+        <!-- Dropdown-meny for Input -->
+        <details open>
+            <summary>Step 1: Input</summary>
+            <div class="input-box">
+                <label for="videoUrl">M3U8 Playlist URL:</label>
+                <input type="text" id="videoUrl" placeholder="Skriv inn M3U8 URL">
+                <button id="fetchButton">Fetch Video</button>
+            </div>
 
-    <!-- Input URL -->
-    <div class="input-box">
-        <label for="videoUrl">M3U8 Playlist URL:</label>
-        <input type="text" id="videoUrl" value="">
-        <button onclick="loadVideo()">Fetch Video</button>
+            <!-- Video Player -->
+            <video id="videoPlayer" controls></video>
+        </details>
+
+        <!-- Step 2: Configuration -->
+        <details>
+            <summary>Step 2: Configuration</summary>
+            <p>Her kan du legge til konfigurasjonsinnstillinger senere.</p>
+        </details>
+
+        <!-- Step 3: Output -->
+        <details>
+            <summary>Step 3: Output</summary>
+            <p>Her vil resultatene fra logoanalysen vises.</p>
+        </details>
+
     </div>
-
-    <!-- Video Player -->
-    <video id="videoPlayer" controls></video>
-</div>
-
-<script src="../static/js/script.js"></script> 
+    <script src="../static/js/script.js"></script>
 </body>
+
 </html>
