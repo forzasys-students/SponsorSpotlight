@@ -32,13 +32,15 @@
                                 <label class="form-label">M3U8 Playlist URL:</label>
                                 <input type="text" id="videoUrl" name="videoUrl" class="form-control">
                             </div>
-                            <button type="submit" class="btn btn-primary w-100">Submit</button>
+                            <button id="submitButton" type="submit" class="btn btn-primary w-100">Submit</button>
                         </form>
                         <p id="errorMsg" class="text-danger text-center mt-3"></p>
                     </div>
                 </div>
             </div>
         </div>
+
+        <div id="loadingCircle"></div>
 
         <!-- Video & Image Display -->
         <div class="row justify-content-center mt-4">

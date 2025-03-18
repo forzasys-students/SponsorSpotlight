@@ -7,13 +7,28 @@ document.addEventListener("DOMContentLoaded", function () {
     const imageView = document.getElementById("imageView");
     const detectionCtx = document.getElementById("detectionChart").getContext("2d");
     const timeCtx = document.getElementById("timeChart").getContext("2d");
+    const submitButton = document.getElementById("submitButton");
+    const loadingCircle = document.getElementById("loadingCircle");
 
     let detectionChartInstance = null;
     let timeChartInstance = null;
 
+    const loadingMsg = document.createElement("p");
+    loadingMsg.textContent = "Loading... Please Wait";
+    loadingMsg.style.color = "#007bff";
+    loadingMsg.style.textAlign = "center";
+    loadingMsg.style.display = "none"; 
+    form.appendChild(loadingMsg);
+
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
         errorMsg.textContent = "";
+
+        submitButton.disabled = true;
+        submitButton.style.backgroundColor = "#ccc"; 
+        submitButton.style.cursor = "not-allowed"; 
+        loadingMsg.style.display = "block";
+        loadingCircle.style.display = "block";
 
         let response;
         try {
@@ -173,6 +188,18 @@ document.addEventListener("DOMContentLoaded", function () {
         } catch (error) {
             errorMsg.textContent = error.message;
             console.error(error);
+        } finally {
+            // Reactivate button and hide "Loading... Please Wait" message
+            setTimeout(() => {
+                loadingMsg.style.display = "none";
+                loadingCircle.style.display = "none"; 
+                submitButton.disabled = false;
+                submitButton.style.backgroundColor = ""; 
+                submitButton.style.cursor = "pointer"; 
+
+                fileInput.value = "";
+                urlInput.value = "";
+            }, 500);
         }
     });
 });
