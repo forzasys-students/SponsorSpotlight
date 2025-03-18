@@ -1,14 +1,27 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import sys
 import subprocess
+import json
+import shutil  
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads') 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
+
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
+app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+@app.route("/outputs/<filename>")
+def serve_output(filename):
+    return send_from_directory(app.config["OUTPUT_FOLDER"], filename)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -45,23 +58,40 @@ def predict_file():
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"Inference failed: {str(e)}"}), 500
 
-    output_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference', 'output.jpg' if mode == 'image' else 'output.mp4'))
+    # Output file paths
+    raw_output = os.path.join(cwd, 'output.jpg' if mode == 'image' else 'output.mp4')
+    final_output = os.path.join(OUTPUT_FOLDER, 'output.jpg' if mode == 'image' else 'output_converted.mp4')
 
-    if not os.path.exists(output_file):
-        return jsonify({"error": f"Output file {output_file} not found!"}), 500
+    if not os.path.exists(raw_output):
+        return jsonify({"error": f"Output file {raw_output} not found!"}), 500
 
+    # Converting video to playable format for browsers
     if mode == 'video':
-        converted_output = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference', 'output_converted.mp4'))
+        converted_output = os.path.join(cwd, 'output_converted.mp4')
 
         subprocess.run([
-            "ffmpeg", "-i", output_file, "-c:v", "libx264",
+            "ffmpeg", "-i", raw_output, "-c:v", "libx264",
             "-preset", "slow", "-crf", "23", "-c:a", "aac",
             "-b:a", "128k", converted_output
         ], check=True)
 
-        return send_file(converted_output, as_attachment=True, mimetype='video/mp4')
+        shutil.move(converted_output, final_output)
+    else:
+        shutil.move(raw_output, final_output)
 
-    return send_file(output_file, as_attachment=True, mimetype='image/jpeg')
+    # Fetching logo stats
+    stats_path = os.path.join(cwd, 'logo_stats.json')
+    stats_data = {}
+    if os.path.exists(stats_path):
+        with open(stats_path, "r") as f:
+            stats_data = json.load(f)
+
+    response_data = {
+        "fileUrl": f"/outputs/{os.path.basename(final_output)}",
+        "stats": stats_data
+    }
+
+    return jsonify(response_data)
 
 if __name__ == '__main__':
     app.run(debug=True)

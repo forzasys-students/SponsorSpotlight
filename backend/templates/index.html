@@ -4,31 +4,68 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SponsorSpotlight</title>
+    
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="../static/css/style.css"> 
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-</head>
-<body>
 
-<div class="container">
-    <h1>SponsorSpotlight</h1>
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light">
+
+    <div class="container py-5">
+        <h1 class="text-center mb-4">SponsorSpotlight</h1>
 
         <!-- Input form -->
-    <form id="uploadForm" action="/", method="post" enctype="multipart/form-data">
-        <label for="mediaFile">Choose file:</label>
-        <input type="file" name="mediaFile" accept="video/*,image/*">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <form id="uploadForm" action="/" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label class="form-label">Choose file:</label>
+                                <input type="file" class="form-control" name="file" accept="video/*,image/*">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">M3U8 Playlist URL:</label>
+                                <input type="text" id="videoUrl" name="videoUrl" class="form-control">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Submit</button>
+                        </form>
+                        <p id="errorMsg" class="text-danger text-center mt-3"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-        <label for="videoUrl">M3U8 Playlist URL:</label>
-        <input type="text" id="videoUrl" name="videoUrl">
-        <button type="submit">Submit</button>
-    </form>
+        <!-- Video & Image Display -->
+        <div class="row justify-content-center mt-4">
+            <div class="col-md-8 col-lg-6">
+                <video id="videoPlayer" controls class="w-100 rounded shadow" style="display: none;"></video>
+                <img id="imageView" class="w-100 rounded shadow mt-3" style="display: none; max-height: 500px; object-fit: contain;">
+            </div>
+        </div>
 
-    <p id="errorMsg" style="color: red;"></p>
+        <!-- Charts Section -->
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-10 col-lg-8">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <h2 class="text-center">Logo Detections</h2>
+                        <canvas id="detectionChart"></canvas>
 
-    <!-- Media Player -->
-    <video id="videoPlayer" controls style="display: none;"></video>
-    <img id="imageView" style="display: none;">
-</div>
+                        <h2 class="text-center mt-4">Logo Time</h2>
+                        <canvas id="timeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<script src="../static/js/script.js"></script> 
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../static/js/script.js"></script> 
 </body>
 </html>

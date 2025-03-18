@@ -5,6 +5,8 @@ import os
 import subprocess
 import numpy as np
 import random
+import json
+from collections import defaultdict 
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -89,20 +91,48 @@ def process_image(image_path):
     output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
 
-# Function to process video
+# Function to process video and track statistics
 def process_video(video_path):
     cap = cv2.VideoCapture(video_path)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter('output.mp4', fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_time = 1 / fps
+
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0})
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
         results = model(frame)
+
+        detected_classes = set()
+        for result in results:
+            obb = result.obb
+            if obb is None:
+                continue
+            for i in range(len(obb.conf)):
+                cls = int(obb.cls[i])
+                class_name = class_names[cls]
+                detected_classes.add(class_name)
+        
+        for logo in detected_classes:
+            logo_stats[logo]["frames"] += 1
+            logo_stats[logo]["time"] += frame_time
+
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
     cap.release()
     out.release()
+
+    stats_path = "logo_stats.json"
+    with open(stats_path, "w") as f:
+        json.dump(logo_stats, f, indent=4)
+
+    print(f"Logo stats saved to {stats_path}")
+    return logo_stats
 
 # Function to check if a path is a URL
 def is_url(path):
