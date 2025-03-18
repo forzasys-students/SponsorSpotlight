@@ -60,7 +60,7 @@ def predict_file():
             "ffmpeg", "-i", output_file, "-c:v", "libx264",
             "-preset", "slow", "-crf", "23", "-c:a", "aac",
             "-b:a", "128k", converted_output
-        ], check=True, shell=True)
+        ], check=True)
 
         return send_file(converted_output, as_attachment=True, mimetype='video/mp4')
 
