@@ -40,9 +40,6 @@ def predict_file():
 
     cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference'))
 
-    print("Kommando som kjøres:", command)
-    print("Arbeidskatalog (cwd):", cwd)
-
     try:
         subprocess.run(command, check=True, cwd=cwd)
     except subprocess.CalledProcessError as e:
