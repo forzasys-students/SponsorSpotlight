@@ -87,9 +87,26 @@ def annotate_frame(frame, results):
 def process_image(image_path):
     image = cv2.imread(image_path)
     results = model(image)
+
+    detected_classes = set()
+    for result in results:
+        obb = result.obb
+        if obb is None:
+            continue
+        for i in range(len(obb.conf)):
+            cls = int(obb.cls[i])
+            class_name = class_names[cls]
+            detected_classes.add(class_name)
+
     annotated_image = annotate_frame(image, results)
     output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
+
+    logo_stats = {logo: {"frames": 1, "time": 0.0} for logo in detected_classes}
+    stats_path = "logo_stats.json"
+    with open(stats_path, "w") as f:
+        json.dump(logo_stats, f, indent=4)
+    return logo_stats
 
 # Function to process video and track statistics
 def process_video(video_path):
@@ -150,6 +167,11 @@ def process_video_stream(url):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (width, height))
 
+    fps = 30.0
+    frame_time = 1 / fps
+
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0})
+
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
         if not raw_image:
@@ -157,6 +179,21 @@ def process_video_stream(url):
         frame = np.frombuffer(raw_image, dtype='uint8').reshape((height, width, 3))
         print('Processing frame...')  # Debug: Check frame processing
         results = model(frame)
+
+        detected_classes = set()
+        for result in results:
+            obb = result.obb
+            if obb is None:
+                continue
+            for i in range(len(obb.conf)):
+                cls = int(obb.cls[i])
+                class_name = class_names[cls]
+                detected_classes.add(class_name)
+        
+        for logo in detected_classes:
+            logo_stats[logo]["frames"] += 1
+            logo_stats[logo]["time"] += frame_time
+
         if results is None or not results:
             print('No detections in this frame.')
         else:
@@ -167,7 +204,13 @@ def process_video_stream(url):
     pipe.stdout.close()
     pipe.wait()
     out.release()
+
+    stats_path = "logo_stats.json"
+    with open(stats_path, "w") as f:
+        json.dump(logo_stats, f, indent=4)
+
     print('Annotated video saved to output.mp4')
+    return logo_stats
 
 # Main function
 if __name__ == '__main__':
