@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const urlInput = document.getElementById("videoUrl");
     const videoPlayer = document.getElementById("videoPlayer");
     const imageView = document.getElementById("imageView");
+    const exportExcel = document.getElementById("exportExcel");
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
 
@@ -15,6 +16,8 @@ document.addEventListener("DOMContentLoaded", function () {
     loadingMsg.style.textAlign = "center";
     loadingMsg.style.display = "none";
     form.appendChild(loadingMsg);
+
+    let responseData;
 
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
@@ -51,11 +54,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (!response.ok) throw new Error("Error handling request");
 
-            const data = await response.json();
-            console.log("Response Data:", data);
+            responseData = await response.json();
+            console.log("Response Data:", responseData);
 
-            const mediaUrl = data.fileUrl;
-            const stats = data.stats;
+            const mediaUrl = responseData.fileUrl;
+            const stats = responseData.stats;
 
             // Updating media section
             if (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png")) {
@@ -72,6 +75,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             updateUIWithData(stats);
+            exportExcel.style.display = "block";
         } catch (error) {
             errorMsg.textContent = error.message;
             console.error(error);
@@ -259,4 +263,33 @@ document.addEventListener("DOMContentLoaded", function () {
 
         Plotly.newPlot('timeChart', [timeTrace], layout);
     }
+
+    // Option to export data to Excel file
+    exportExcel.addEventListener("click", async() => {
+        if (!responseData || !responseData.stats) {
+            throw new Error("No data to export.");
+        }
+
+        const excelHeader = ["Logo", "Number of Detections", "Total Exposure Time (seconds)"];
+        const dataForExcel = Object.keys(responseData.stats).map(logo => ({
+            Logo: logo,
+            "Number of Detections": responseData.stats[logo].frames,
+            "Total Exposure Time (seconds)": responseData.stats[logo].time
+        }));
+
+        const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+        const workbook = XLSX.utils.book_new();
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "SponsorSpotlight");
+        XLSX.utils.sheet_add_aoa(worksheet, [excelHeader], { origin: "A1" });
+
+        let wscols = []
+        excelHeader.map(arr => {
+        wscols.push({ wch: arr.length + 5 })
+        })
+        worksheet["!cols"] = wscols;
+
+        XLSX.writeFile(workbook, "SponsorSpotlight.xlsx", { compression: true });
+    });
 });
