@@ -11,7 +11,7 @@
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
 <body class="bg-light">
 
@@ -51,15 +51,15 @@
         </div>
 
         <!-- Charts Section -->
-        <div class="row justify-content-center mt-5">
-            <div class="col-md-10 col-lg-8">
+        <div class="row justify-content-center mt-5" id="chartsContainer">
+            <div class="col-md-12 col-lg-0">
                 <div class="card shadow">
                     <div class="card-body">
                         <h2 class="text-center">Logo Detections</h2>
-                        <canvas id="detectionChart"></canvas>
+                        <div id="detectionChart"></div>
 
                         <h2 class="text-center mt-4">Logo Time</h2>
-                        <canvas id="timeChart"></canvas>
+                        <div id="timeChart"></div>
                     </div>
                 </div>
             </div>

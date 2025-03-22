@@ -5,19 +5,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const urlInput = document.getElementById("videoUrl");
     const videoPlayer = document.getElementById("videoPlayer");
     const imageView = document.getElementById("imageView");
-    const detectionCtx = document.getElementById("detectionChart").getContext("2d");
-    const timeCtx = document.getElementById("timeChart").getContext("2d");
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
 
-    let detectionChartInstance = null;
-    let timeChartInstance = null;
 
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
     loadingMsg.style.color = "#007bff";
     loadingMsg.style.textAlign = "center";
-    loadingMsg.style.display = "none"; 
+    loadingMsg.style.display = "none";
     form.appendChild(loadingMsg);
 
     form.addEventListener("submit", async function (event) {
@@ -25,8 +21,8 @@ document.addEventListener("DOMContentLoaded", function () {
         errorMsg.textContent = "";
 
         submitButton.disabled = true;
-        submitButton.style.backgroundColor = "#ccc"; 
-        submitButton.style.cursor = "not-allowed"; 
+        submitButton.style.backgroundColor = "#ccc";
+        submitButton.style.cursor = "not-allowed";
         loadingMsg.style.display = "block";
         loadingCircle.style.display = "block";
 
@@ -75,116 +71,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 throw new Error("Unknown media type.");
             }
 
-            // Convert JSON to statistics for charts
-            const labels = Object.keys(stats);
-            const detectionCounts = labels.map(logo => stats[logo].frames);
-            const timeCounts = labels.map(logo => stats[logo].time);
-
-            // Sort based on detections / time
-            const sortedData = labels.map((label, i) => ({
-                label,
-                detection: detectionCounts[i],
-                time: timeCounts[i]
-            })).sort((a, b) => b.detection - a.detection);
-
-            const sortedLabels = sortedData.map(item => item.label);
-            const sortedDetections = sortedData.map(item => item.detection);
-            const sortedTimes = sortedData.map(item => item.time);
-
-            // Dynamically adjusting diagram size based on amounbt of labels
-            const chartHeight = Math.max(300, sortedLabels.length * 50);
-            document.getElementById("detectionChart").parentElement.style.height = `${chartHeight}px`;
-            document.getElementById("timeChart").parentElement.style.height = `${chartHeight}px`;
-
-            if (detectionChartInstance) detectionChartInstance.destroy();
-            if (timeChartInstance) timeChartInstance.destroy();
-
-            // Diagram creation (Detections)
-            detectionChartInstance = new Chart(detectionCtx, {
-                type: 'bar',
-                data: {
-                    labels: sortedLabels,
-                    datasets: [{
-                        label: 'Number of detections',
-                        data: sortedDetections,
-                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 2,
-                    indexAxis: 'y',
-                    scales: {
-                        y: {
-                            ticks: {
-                                autoSkip: false,
-                                font: { size: 14 },
-                                padding: 10
-                            }
-                        },
-                        x: {
-                            ticks: { font: { size: 14 } }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    elements: {
-                        bar: {
-                            categoryPercentage: 0.1,
-                            barPercentage: 0.2,
-                            maxBarThickness: 10
-                        }
-                    }
-                }
-            });
-
-            // Diagram creation (time)
-            timeChartInstance = new Chart(timeCtx, {
-                type: 'bar',
-                data: {
-                    labels: sortedLabels,
-                    datasets: [{
-                        label: 'Total exposure time (seconds)',
-                        data: sortedTimes,
-                        backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 2,
-                    indexAxis: 'y',
-                    scales: {
-                        y: {
-                            ticks: {
-                                autoSkip: false,
-                                font: { size: 14 },
-                                padding: 10
-                            }
-                        },
-                        x: {
-                            ticks: { font: { size: 14 } }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    elements: {
-                        bar: {
-                            categoryPercentage: 0.1,
-                            barPercentage: 0.2,
-                            maxBarThickness: 10
-                        }
-                    }
-                }
-            });
-
+            updateUIWithData(stats);
         } catch (error) {
             errorMsg.textContent = error.message;
             console.error(error);
@@ -192,14 +79,184 @@ document.addEventListener("DOMContentLoaded", function () {
             // Reactivate button and hide "Loading... Please Wait" message
             setTimeout(() => {
                 loadingMsg.style.display = "none";
-                loadingCircle.style.display = "none"; 
+                loadingCircle.style.display = "none";
                 submitButton.disabled = false;
-                submitButton.style.backgroundColor = ""; 
-                submitButton.style.cursor = "pointer"; 
+                submitButton.style.backgroundColor = "";
+                submitButton.style.cursor = "pointer";
 
                 fileInput.value = "";
                 urlInput.value = "";
             }, 500);
         }
     });
+
+    //Wrap funcion for longer labels so they won't take a lot of horizontal space
+    function wrapLabels(labels, maxLength = 30) {
+        return labels.map(label => {
+            let wrappedLabel = '';
+            let currentLength = 0;
+
+            const words = label.split(' ');
+
+            /* Add words to the wrapped label, inserting <br> when maxLength is reached. Using this method as Plotly does not support 
+            wrapping labels */
+            words.forEach(word => {
+                if (currentLength + word.length > maxLength) {
+                    wrappedLabel += '<br>';
+                    currentLength = 0;
+                }
+                wrappedLabel += word + ' ';
+                currentLength += word.length + 1;
+            });
+
+            return wrappedLabel.trim();
+        });
+    }
+
+    function updateUIWithData(data) {
+        const stats = data;
+
+        // Prepare data for Plotly
+        const labels = Object.keys(stats);
+        const detectionCounts = labels.map(logo => stats[logo].frames);
+        const timeCounts = labels.map(logo => stats[logo].time);
+
+        // Sort data for the detection chart by detections in ascending order (Plotly will showcase largest value at the top)
+        const sortedDetectionData = labels.map((label, i) => ({
+            label,
+            detection: detectionCounts[i],
+            time: timeCounts[i]
+        })).sort((a, b) => a.detection - b.detection);
+
+        const sortedDetectionLabels = sortedDetectionData.map(item => item.label);
+        const sortedDetections = sortedDetectionData.map(item => item.detection);
+
+        // Sort data for the time chart by time in ascending order (Plotly will showcase largest value at the top)
+        const sortedTimeData = labels.map((label, i) => ({
+            label,
+            detection: detectionCounts[i],
+            time: timeCounts[i]
+        })).sort((a, b) => a.time - b.time);
+
+        const sortedTimeLabels = sortedTimeData.map(item => item.label);
+        const sortedTimes = sortedTimeData.map(item => item.time);
+
+        // Update charts
+        updateDetectionChart(sortedDetectionLabels, sortedDetections);
+        updateTimeChart(sortedTimeLabels, sortedTimes);
+    }
+
+    function updateDetectionChart(labels, detections) {
+        const wrappedLabels = wrapLabels(labels);
+
+        const detectionTrace = {
+            x: detections,
+            y: wrappedLabels, // Use wrapped labels
+            type: 'bar',
+            orientation: 'h',
+            name: 'Number of Detections',
+            marker: { color: 'rgba(75, 192, 192, 0.6)' }
+        };
+
+        const layout = {
+            title: 'Number of Detections',
+            height: Math.max(400, labels.length * 40),
+            width: 1000,
+            margin: { l: 200, r: 50, t: 50, b: 50 },
+            bargap: 0.5,
+            yaxis: {
+                showticklabels: false,
+                showgrid: true,
+                gridcolor: '#ddd',
+                gridwidth: 1
+            },
+            //Annotations used for more customization options
+            annotations: [
+                ...wrappedLabels.map((label, index) => ({
+                    x: -0.01,
+                    y: index,
+                    xref: 'paper',
+                    yref: 'y',
+                    text: label,
+                    showarrow: false,
+                    font: { size: 12, color: '#000', family: 'Arial' },
+                    bgcolor: '#f9f9f9',
+                    bordercolor: '#ccc',
+                    borderwidth: 1,
+                    borderpad: 4,
+                    xanchor: 'right',
+                    yanchor: 'middle'
+                })),
+                //Show value at end of bars
+                ...detections.map((value, index) => ({
+                    x: value,
+                    y: index,
+                    text: value.toString(),
+                    showarrow: false,
+                    font: { size: 12, color: '#000', family: 'Arial' },
+                    xanchor: 'left',
+                    yanchor: 'middle'
+                }))
+            ]
+        };
+
+        Plotly.newPlot('detectionChart', [detectionTrace], layout);
+    }
+
+    function updateTimeChart(labels, times) {
+        const wrappedLabels = wrapLabels(labels);
+
+        const timeTrace = {
+            x: times,
+            y: labels, // Use wrapped labels
+            type: 'bar',
+            orientation: 'h',
+            name: 'Total Exposure Time (seconds)',
+            marker: { color: 'rgba(255, 99, 132, 0.6)' }
+        };
+
+        const layout = {
+            title: 'Total Exposure Time (seconds)',
+            height: Math.max(400, labels.length * 40),
+            width: 1000,
+            margin: { l: 200, r: 50, t: 50, b: 50 },
+            bargap: 0.5,
+            yaxis: {
+                showticklabels: false,
+                showgrid: true,
+                gridcolor: '#ddd',
+                gridwidth: 1
+            },
+            //Annotations used for more customization options
+            annotations: [
+                ...wrappedLabels.map((label, index) => ({
+                    x: -0.01,
+                    y: index,
+                    xref: 'paper',
+                    yref: 'y',
+                    text: label,
+                    showarrow: false,
+                    font: { size: 12, color: '#000', family: 'Arial' },
+                    bgcolor: '#f9f9f9',
+                    bordercolor: '#ccc',
+                    borderwidth: 1,
+                    borderpad: 4,
+                    xanchor: 'right',
+                    yanchor: 'middle'
+                })),
+                //Show value at end of bars
+                ...times.map((value, index) => ({
+                    x: value,
+                    y: index,
+                    text: value.toString(),
+                    showarrow: false,
+                    font: { size: 12, color: '#000', family: 'Arial' },
+                    xanchor: 'left',
+                    yanchor: 'middle'
+                }))
+            ]
+        };
+
+        Plotly.newPlot('timeChart', [timeTrace], layout);
+    }
 });

@@ -144,6 +144,10 @@ def process_video(video_path):
     cap.release()
     out.release()
 
+    # Round time values to 2 decimal places
+    for logo, stats in logo_stats.items():
+        stats["time"] = round(stats["time"], 2)
+
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
         json.dump(logo_stats, f, indent=4)
@@ -204,6 +208,10 @@ def process_video_stream(url):
     pipe.stdout.close()
     pipe.wait()
     out.release()
+
+    # Round time values to 2 decimal places
+    for logo, stats in logo_stats.items():
+        stats["time"] = round(stats["time"], 2)
 
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
