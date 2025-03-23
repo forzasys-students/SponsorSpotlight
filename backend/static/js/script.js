@@ -9,8 +9,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
     const dropdown = document.getElementById("categoryDropdown");
-
-
+    const timeChart = document.getElementById("timeChart"); 
+    const timeChartHeader = document.getElementById("timeChartHeader");
+       
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
     loadingMsg.style.color = "#007bff";
@@ -135,6 +136,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const sortedDetectionLabels = sortedDetectionData.map(item => item.label);
         const sortedDetections = sortedDetectionData.map(item => item.detection);
+
+        //CHecking if data is image, as it is then no need to show time charts
+        const isImage = responseData.fileUrl.endsWith(".jpg");
+        
+        if (isImage) {
+                timeChart.style.display = "none";
+                timeChartHeader.style.display = "none";
+        } else {
+                timeChart.style.display = "block";
+                timeChartHeader.style.display = "block";
+        }
 
         // Sort data for the time chart by time in ascending order (Plotly will showcase largest value at the top)
         const sortedTimeData = labels.map((label, i) => ({
@@ -305,7 +317,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     //Function for filtering logos in charts.
     document.getElementById("filterButton").addEventListener("click", function () {
-        const dropdown = document.getElementById("categoryDropdown");
         const selectedCategories = Array.from(dropdown.selectedOptions).map(option => option.value);
 
         const filteredData = Object.keys(responseData.stats)
@@ -324,7 +335,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     //Updating dropdown with new logos
     function updateDropdown(labels) {
-        const dropdown = document.getElementById("categoryDropdown");
         dropdown.innerHTML = ""; 
     
         labels.forEach(label => {
