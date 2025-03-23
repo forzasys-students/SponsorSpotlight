@@ -1,18 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SponsorSpotlight</title>
-    
+
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="../static/css/style.css"> 
+    <link rel="stylesheet" href="../static/css/style.css">
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 </head>
+
 <body class="bg-light">
 
     <div class="container py-5">
@@ -46,11 +48,30 @@
         <div class="row justify-content-center mt-4">
             <div class="col-md-8 col-lg-6">
                 <video id="videoPlayer" controls class="w-100 rounded shadow" style="display: none;"></video>
-                <img id="imageView" class="w-100 rounded shadow mt-3" style="display: none; max-height: 500px; object-fit: contain;">
+                <img id="imageView" class="w-100 rounded shadow mt-3"
+                    style="display: none; max-height: 500px; object-fit: contain;">
             </div>
         </div>
 
-        <button type="button" id="exportExcel" class="btn btn-primary mt-4" style="display: none;">Export to Excel</button>
+        <!-- Dropdown-menu -->
+        <div class="row mt-3">
+            <div class="col">
+                <select id="categoryDropdown" class="form-control" style="display: none;" multiple></select>
+            </div>
+        </div>
+        <div id="infoTextDropdown" class="row mt-2" style="display: none;">
+            <p>Hold down the Ctrl (windows) /
+                Command (Mac) button to select multiple options.
+            </p>
+        </div>
+        <div class="row mt-2">
+            <div class="col-auto">
+                <button id="filterButton" class="btn btn-primary" style="display: none;">Filter</button>
+            </div>
+            <div class="col-auto">
+                <button id="resetButton" class="btn btn-secondary" style="display: none;">Reset filters</button>
+            </div>
+        </div>
 
         <!-- Charts Section -->
         <div class="row justify-content-center mt-5" id="chartsContainer">
@@ -62,6 +83,9 @@
 
                         <h2 class="text-center mt-4">Logo Time</h2>
                         <div id="timeChart"></div>
+
+                        <button type="button" id="exportExcel" class="btn btn-primary mt-2" style="display: none;">Export to
+                            Excel</button>
                     </div>
                 </div>
             </div>
@@ -70,6 +94,7 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="../static/js/script.js"></script> 
+    <script src="../static/js/script.js"></script>
 </body>
+
 </html>

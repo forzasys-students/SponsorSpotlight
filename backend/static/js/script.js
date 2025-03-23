@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const exportExcel = document.getElementById("exportExcel");
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
+    const dropdown = document.getElementById("categoryDropdown");
 
 
     const loadingMsg = document.createElement("p");
@@ -148,6 +149,15 @@ document.addEventListener("DOMContentLoaded", function () {
         // Update charts
         updateDetectionChart(sortedDetectionLabels, sortedDetections);
         updateTimeChart(sortedTimeLabels, sortedTimes);
+
+        
+        document.getElementById("categoryDropdown").style.display = "block";
+        document.getElementById("infoTextDropdown").style.display = "block";
+        document.getElementById("filterButton").style.display = "block";
+        document.getElementById("resetButton").style.display = "block";
+        
+        //Update dropdown menu
+        updateDropdown(labels);
     }
 
     function updateDetectionChart(labels, detections) {
@@ -292,4 +302,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
         XLSX.writeFile(workbook, "SponsorSpotlight.xlsx", { compression: true });
     });
+
+    //Function for filtering logos in charts.
+    document.getElementById("filterButton").addEventListener("click", function () {
+        const dropdown = document.getElementById("categoryDropdown");
+        const selectedCategories = Array.from(dropdown.selectedOptions).map(option => option.value);
+
+        const filteredData = Object.keys(responseData.stats)
+            .filter(logo => selectedCategories.includes(logo))
+            .reduce((acc, logo) => {
+                acc[logo] = responseData.stats[logo];
+                return acc;
+            }, {});
+    
+        updateUIWithData(filteredData); 
+    });
+
+    document.getElementById("resetButton").addEventListener("click", function () {
+        updateUIWithData(responseData.stats); 
+    });
+
+    //Updating dropdown with new logos
+    function updateDropdown(labels) {
+        const dropdown = document.getElementById("categoryDropdown");
+        dropdown.innerHTML = ""; 
+    
+        labels.forEach(label => {
+            const option = document.createElement("option");
+            option.value = label;
+            option.textContent = label;
+            dropdown.appendChild(option);
+        });
+    }
 });

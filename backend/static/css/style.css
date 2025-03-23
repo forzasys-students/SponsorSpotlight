@@ -41,5 +41,14 @@ video, #imageView {
     margin-bottom: 150px; 
 }
 
+#categoryDropdown {
+    height: 150px;
+    min-width: 200px;
+    width: auto;
+}
+
+#filterButton, #resetButton {
+    min-width: 100px; 
+}
 
 
