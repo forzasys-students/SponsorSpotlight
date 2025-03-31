@@ -60,25 +60,13 @@ def predict_file():
 
     # Output file paths
     raw_output = os.path.join(cwd, 'output.jpg' if mode == 'image' else 'output.mp4')
-    final_output = os.path.join(OUTPUT_FOLDER, 'output.jpg' if mode == 'image' else 'output_converted.mp4')
+    final_output = os.path.join(OUTPUT_FOLDER, 'output.jpg' if mode == 'image' else 'output.mp4')
 
     if not os.path.exists(raw_output):
         return jsonify({"error": f"Output file {raw_output} not found!"}), 500
 
-    # Converting video to playable format for browsers
-    if mode == 'video':
-        converted_output = os.path.join(cwd, 'output_converted.mp4')
 
-        subprocess.run([
-            "ffmpeg", "-i", raw_output, "-c:v", "libx264",
-            "-preset", "slow", "-crf", "23", "-c:a", "aac",
-            "-b:a", "128k", converted_output
-        ], check=True)
-
-        shutil.move(converted_output, final_output)
-    else:
-        shutil.move(raw_output, final_output)
-
+    shutil.move(raw_output, final_output)
     # Fetching logo stats
     stats_path = os.path.join(cwd, 'logo_stats.json')
     stats_data = {}

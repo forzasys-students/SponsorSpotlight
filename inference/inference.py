@@ -115,7 +115,7 @@ def process_image(image_path):
 # Function to process video and track statistics
 def process_video(video_path):
     cap = cv2.VideoCapture(video_path)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     out = cv2.VideoWriter('output.mp4', fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
 
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -188,7 +188,7 @@ def process_video_stream(url):
     ]
     pipe = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, bufsize=10**8)
     width, height = 1280, 720  # Set the expected width and height of the video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (width, height))
 
     fps = 30.0
