@@ -9,8 +9,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
     const dropdown = document.getElementById("categoryDropdown");
-    const timeChart = document.getElementById("timeChart"); 
-    const timeChartHeader = document.getElementById("timeChartHeader");
        
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
@@ -124,44 +122,23 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Prepare data for Plotly
         const labels = Object.keys(stats);
-        const detectionCounts = labels.map(logo => stats[logo].frames);
-        const timeCounts = labels.map(logo => stats[logo].time);
 
-        // Sort data for the detection chart by detections in ascending order (Plotly will showcase largest value at the top)
-        const sortedDetectionData = labels.map((label, i) => ({
+        /* Sort data after percentages in ascending order (Plotly will showcase largest value at the top).
+        All stats are shown in the same chart, but bars are based on % of exposure compared to total time.
+        */
+        const sortedData = labels.map((label, i) => ({
             label,
-            detection: detectionCounts[i],
-            time: timeCounts[i]
-        })).sort((a, b) => a.detection - b.detection);
+            percentage: stats[label].percentage,
+            time: stats[label].time,
+            frames: stats[label].frames,
+            detections: stats[label].detections
+        })).sort((a, b) => a.percentage - b.percentage);
 
-        const sortedDetectionLabels = sortedDetectionData.map(item => item.label);
-        const sortedDetections = sortedDetectionData.map(item => item.detection);
-
-        //CHecking if data is image, as it is then no need to show time charts
-        const isImage = responseData.fileUrl.endsWith(".jpg");
+        const sortedLabels = sortedData.map(item => item.label);
+        const sortedPercentages = sortedData.map(item => item.percentage);
         
-        if (isImage) {
-                timeChart.style.display = "none";
-                timeChartHeader.style.display = "none";
-        } else {
-                timeChart.style.display = "block";
-                timeChartHeader.style.display = "block";
-        }
-
-        // Sort data for the time chart by time in ascending order (Plotly will showcase largest value at the top)
-        const sortedTimeData = labels.map((label, i) => ({
-            label,
-            detection: detectionCounts[i],
-            time: timeCounts[i]
-        })).sort((a, b) => a.time - b.time);
-
-        const sortedTimeLabels = sortedTimeData.map(item => item.label);
-        const sortedTimes = sortedTimeData.map(item => item.time);
-
         // Update charts
-        updateDetectionChart(sortedDetectionLabels, sortedDetections);
-        updateTimeChart(sortedTimeLabels, sortedTimes);
-
+        updateChart(sortedLabels, sortedPercentages, stats);
         
         document.getElementById("categoryDropdown").style.display = "block";
         document.getElementById("infoTextDropdown").style.display = "block";
@@ -172,20 +149,37 @@ document.addEventListener("DOMContentLoaded", function () {
         updateDropdown(labels);
     }
 
-    function updateDetectionChart(labels, detections) {
+    function updateChart(labels, percentages, stats) {
         const wrappedLabels = wrapLabels(labels);
 
-        const detectionTrace = {
-            x: detections,
+        //Shorter formatted text for bars
+        const barTexts = labels.map(logo => {
+            const stat = stats[logo];
+            return `${stat.percentage}% (f:${stat.frames}, d:${stat.detections}, t:${stat.time})`;
+        });
+        //Longer formatted text when hovering
+        const hoverTexts = labels.map(logo => {
+            const stat = stats[logo];
+            return `<b>${logo}</b><br>
+            Percentage: ${stat.percentage}%<br>
+            Frames: ${stat.frames}<br>
+            Detections: ${stat.detections}<br>
+            Time: ${stat.time}s`;
+        });
+
+        const trace = {
+            x: percentages,
             y: wrappedLabels, // Use wrapped labels
             type: 'bar',
             orientation: 'h',
-            name: 'Number of Detections',
-            marker: { color: 'rgba(75, 192, 192, 0.6)' }
+            name: 'Exposure percentages',
+            marker: { color: 'rgba(75, 192, 192, 0.6)' },
+            hoverinfo: 'text',
+            hovertext: hoverTexts
         };
 
         const layout = {
-            title: 'Number of Detections',
+            title: 'Exposure percentages',
             height: Math.max(400, labels.length * 40),
             width: 1000,
             margin: { l: 200, r: 50, t: 50, b: 50 },
@@ -214,10 +208,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     yanchor: 'middle'
                 })),
                 //Show value at end of bars
-                ...detections.map((value, index) => ({
-                    x: value,
+                ...percentages.map((_, index) => ({
+                    x: percentages[index],
                     y: index,
-                    text: value.toString(),
+                    text: barTexts[index],
                     showarrow: false,
                     font: { size: 12, color: '#000', family: 'Arial' },
                     xanchor: 'left',
@@ -226,64 +220,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ]
         };
 
-        Plotly.newPlot('detectionChart', [detectionTrace], layout);
-    }
-
-    function updateTimeChart(labels, times) {
-        const wrappedLabels = wrapLabels(labels);
-
-        const timeTrace = {
-            x: times,
-            y: labels, // Use wrapped labels
-            type: 'bar',
-            orientation: 'h',
-            name: 'Total Exposure Time (seconds)',
-            marker: { color: 'rgba(255, 99, 132, 0.6)' }
-        };
-
-        const layout = {
-            title: 'Total Exposure Time (seconds)',
-            height: Math.max(400, labels.length * 40),
-            width: 1000,
-            margin: { l: 200, r: 50, t: 50, b: 50 },
-            bargap: 0.5,
-            yaxis: {
-                showticklabels: false,
-                showgrid: true,
-                gridcolor: '#ddd',
-                gridwidth: 1
-            },
-            //Annotations used for more customization options
-            annotations: [
-                ...wrappedLabels.map((label, index) => ({
-                    x: -0.01,
-                    y: index,
-                    xref: 'paper',
-                    yref: 'y',
-                    text: label,
-                    showarrow: false,
-                    font: { size: 12, color: '#000', family: 'Arial' },
-                    bgcolor: '#f9f9f9',
-                    bordercolor: '#ccc',
-                    borderwidth: 1,
-                    borderpad: 4,
-                    xanchor: 'right',
-                    yanchor: 'middle'
-                })),
-                //Show value at end of bars
-                ...times.map((value, index) => ({
-                    x: value,
-                    y: index,
-                    text: value.toString(),
-                    showarrow: false,
-                    font: { size: 12, color: '#000', family: 'Arial' },
-                    xanchor: 'left',
-                    yanchor: 'middle'
-                }))
-            ]
-        };
-
-        Plotly.newPlot('timeChart', [timeTrace], layout);
+        Plotly.newPlot('chart', [trace], layout);
     }
 
     // Option to export data to Excel file
@@ -292,11 +229,13 @@ document.addEventListener("DOMContentLoaded", function () {
             throw new Error("No data to export.");
         }
 
-        const excelHeader = ["Logo", "Number of Detections", "Total Exposure Time (seconds)"];
+        const excelHeader = ["Logo", "Percentage", "Time (s)", "Frames", "Detections"];
         const dataForExcel = Object.keys(responseData.stats).map(logo => ({
             Logo: logo,
-            "Number of Detections": responseData.stats[logo].frames,
-            "Total Exposure Time (seconds)": responseData.stats[logo].time
+            Percentage: responseData.stats[logo].percentage + "%",
+            "Time (s)": responseData.stats[logo].time,
+            Frames: responseData.stats[logo].frames,
+            Detections: responseData.stats[logo].detections
         }));
 
         const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
@@ -315,7 +254,7 @@ document.addEventListener("DOMContentLoaded", function () {
         XLSX.writeFile(workbook, "SponsorSpotlight.xlsx", { compression: true });
     });
 
-    //Function for filtering logos in charts.
+    //Function for filtering logos in chart.
     document.getElementById("filterButton").addEventListener("click", function () {
         const selectedCategories = Array.from(dropdown.selectedOptions).map(option => option.value);
 

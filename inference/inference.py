@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 import random
 import json
-from collections import defaultdict 
+from collections import defaultdict, Counter
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +88,7 @@ def process_image(image_path):
     image = cv2.imread(image_path)
     results = model(image)
 
-    detected_classes = set()
+    logo_count = Counter()
     for result in results:
         obb = result.obb
         if obb is None:
@@ -96,13 +96,17 @@ def process_image(image_path):
         for i in range(len(obb.conf)):
             cls = int(obb.cls[i])
             class_name = class_names[cls]
-            detected_classes.add(class_name)
+            logo_count[class_name] += 1
 
     annotated_image = annotate_frame(image, results)
     output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
 
-    logo_stats = {logo: {"frames": 1, "time": 0.0} for logo in detected_classes}
+    logo_stats = {
+        logo: {"frames": 1, "time": 0.0, "detections": count}
+        for logo, count in logo_count.items() if count > 0
+    }
+    
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
         json.dump(logo_stats, f, indent=4)
@@ -116,8 +120,9 @@ def process_video(video_path):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_time = 1 / fps
+    total_video_time = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
 
-    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0})
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -125,7 +130,8 @@ def process_video(video_path):
             break
         results = model(frame)
 
-        detected_classes = set()
+        logo_count = Counter()
+
         for result in results:
             obb = result.obb
             if obb is None:
@@ -133,28 +139,30 @@ def process_video(video_path):
             for i in range(len(obb.conf)):
                 cls = int(obb.cls[i])
                 class_name = class_names[cls]
-                detected_classes.add(class_name)
+                logo_count[class_name] += 1
         
-        for logo in detected_classes:
-            logo_stats[logo]["frames"] += 1
-            logo_stats[logo]["time"] += frame_time
+        for logo, count in logo_count.items():
+            if count > 0:
+                logo_stats[logo]["frames"] += 1
+                logo_stats[logo]["time"] += frame_time
+                logo_stats[logo]["detections"] += count
 
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
     cap.release()
     out.release()
 
-    # Round time values to 2 decimal places
+    # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in logo_stats.items():
         stats["time"] = round(stats["time"], 2)
+        stats["percentage"] = round(stats["time"] / total_video_time * 100, 2)
 
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
         json.dump(logo_stats, f, indent=4)
 
-    print(f"Logo stats saved to {stats_path}")
     return logo_stats
-
+    
 # Function to check if a path is a URL
 def is_url(path):
     return path.startswith('http://') or path.startswith('https://')
@@ -162,6 +170,18 @@ def is_url(path):
 # Function to process video stream from URL
 # Use ffmpeg to select the highest quality stream
 def process_video_stream(url):
+    # Using ffprobe to get video duration
+    ffprobe_cmd = [
+        'ffprobe', '-v', 'error', '-show_entries',
+        'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', url
+    ]
+    try:
+        duration = float(subprocess.check_output(ffprobe_cmd).decode('utf-8').strip())
+        total_video_time = round(duration, 2)
+    except (subprocess.CalledProcessError, ValueError):
+        print("Warning: Could not determine video duration, using fallback calculation")
+        total_video_time = 0
+
     # Use ffmpeg to get the best quality stream
     ffmpeg_command = [
         'ffmpeg', '-i', url, '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
@@ -173,18 +193,23 @@ def process_video_stream(url):
 
     fps = 30.0
     frame_time = 1 / fps
+    frame_count = 0    
 
-    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0})
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
 
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
         if not raw_image:
             break
         frame = np.frombuffer(raw_image, dtype='uint8').reshape((height, width, 3))
-        print('Processing frame...')  # Debug: Check frame processing
+        frame_count += 1
+
+        if total_video_time == 0:
+            total_video_time = frame_count * frame_time
+        
         results = model(frame)
 
-        detected_classes = set()
+        logo_count = Counter()
         for result in results:
             obb = result.obb
             if obb is None:
@@ -192,16 +217,14 @@ def process_video_stream(url):
             for i in range(len(obb.conf)):
                 cls = int(obb.cls[i])
                 class_name = class_names[cls]
-                detected_classes.add(class_name)
+                logo_count[class_name] += 1
         
-        for logo in detected_classes:
-            logo_stats[logo]["frames"] += 1
-            logo_stats[logo]["time"] += frame_time
+        for logo, count in logo_count.items():
+            if count > 0:
+                logo_stats[logo]["frames"] += 1
+                logo_stats[logo]["time"] += frame_time
+                logo_stats[logo]["detections"] += count
 
-        if results is None or not results:
-            print('No detections in this frame.')
-        else:
-            print(f'Detections: {len(results)}')  # Debug: Check number of detections
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
 
@@ -209,9 +232,10 @@ def process_video_stream(url):
     pipe.wait()
     out.release()
 
-    # Round time values to 2 decimal places
+    # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in logo_stats.items():
         stats["time"] = round(stats["time"], 2)
+        stats["percentage"] = round(stats["time"] / total_video_time * 100, 2)
 
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:

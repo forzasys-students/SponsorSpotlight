@@ -36,7 +36,7 @@ video, #imageView {
     100% { transform: rotate(360deg); }
 }
 
-#detectionChart, #timeChart {
+#chart {
     width: 100%; 
     margin-bottom: 150px; 
 }
