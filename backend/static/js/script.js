@@ -291,7 +291,8 @@ document.addEventListener("DOMContentLoaded", function () {
             xaxis: {
                 title: 'Number of Detections',
                 showgrid: true,
-                gridcolor: '#ddd'
+                gridcolor: '#ddd',
+                dtick: 1
             },
             yaxis: {
                 showticklabels: false
@@ -304,7 +305,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     yref: 'y',
                     text: label,
                     showarrow: false,
-                    font: { size: 12 },
+                    font: { size: 12, color: '#000', family: 'Arial' },
+                    bgcolor: '#f9f9f9',
+                    bordercolor: '#ccc',
+                    borderwidth: 1,
+                    borderpad: 4,
                     xanchor: 'right',
                     yanchor: 'middle'
                 })),

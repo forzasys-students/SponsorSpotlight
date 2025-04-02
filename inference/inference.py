@@ -1,3 +1,4 @@
+import hashlib
 import cv2
 import torch
 from ultralytics import YOLO
@@ -11,6 +12,10 @@ from logo_groups import LOGO_GROUPS
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Output directory setup
+BASE_DIR = os.path.dirname(os.path.dirname(script_dir))  
+OUTPUT_DIR = os.path.join(BASE_DIR, 'SponsorSpotlight', 'backend', 'outputs')
 
 # Load the model
 model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
@@ -85,7 +90,11 @@ def annotate_frame(frame, results):
     return frame
 
 # Function to process image
-def process_image(image_path):
+def process_image(image_path, file_hash):
+    #Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.jpg')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+
     image = cv2.imread(image_path)
     results = model(image)
 
@@ -100,7 +109,6 @@ def process_image(image_path):
             logo_count[class_name] += 1
 
     annotated_image = annotate_frame(image, results)
-    output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
 
     aggregated_stats = defaultdict(lambda: {"detections": 0})
@@ -112,17 +120,21 @@ def process_image(image_path):
     
     aggregated_stats = dict(aggregated_stats)
 
-    stats_path = "logo_stats.json"
+    stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
         
     return aggregated_stats
 
 # Function to process video and track statistics
-def process_video(video_path):
+def process_video(video_path, file_hash):
+    #Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+            
     cap = cv2.VideoCapture(video_path)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    out = cv2.VideoWriter('output.mp4', fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
+    out = cv2.VideoWriter(output_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_time = 1 / fps
@@ -165,7 +177,7 @@ def process_video(video_path):
         stats["time"] = round(stats["time"], 2)
         stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
 
-    stats_path = "logo_stats.json"
+    stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
 
@@ -177,7 +189,11 @@ def is_url(path):
 
 # Function to process video stream from URL
 # Use ffmpeg to select the highest quality stream
-def process_video_stream(url):
+def process_video_stream(url, file_hash):
+    #Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+
     # Using ffprobe to get video duration
     ffprobe_cmd = [
         'ffprobe', '-v', 'error', '-show_entries',
@@ -197,7 +213,7 @@ def process_video_stream(url):
     pipe = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, bufsize=10**8)
     width, height = 1280, 720  # Set the expected width and height of the video
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (width, height))
+    out = cv2.VideoWriter(output_path, fourcc, 30.0, (width, height))
 
     fps = 30.0
     frame_time = 1 / fps
@@ -247,7 +263,7 @@ def process_video_stream(url):
         stats["time"] = round(stats["time"], 2)
         stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
 
-    stats_path = "logo_stats.json"
+    stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
 
@@ -264,7 +280,6 @@ def aggregate_stats(logo_stats):
         aggregated[main_logo]["frames"] += stats["frames"]
         aggregated[main_logo]["time"] += stats["time"]
         aggregated[main_logo]["detections"] += stats["detections"]
-        # Percentage will be recalculated later
     
     return aggregated
 
@@ -277,14 +292,15 @@ if __name__ == '__main__':
 
     mode = sys.argv[1]
     path = sys.argv[2]
+    hash = sys.argv[3]
 
     if mode == 'image':
-        process_image(path)
+        process_image(path, hash)
     elif mode == 'video':
         if is_url(path):
-            process_video_stream(path)
+            process_video_stream(path, hash)
         else:
-            process_video(path)
+            process_video(path, hash)
     else:
         print('Invalid mode. Use "image" or "video".')
         sys.exit(1)

@@ -1,3 +1,4 @@
+import hashlib
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import sys
@@ -19,6 +20,15 @@ OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
 app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+# Getting file hash to check if processed version exists already.
+# If not then hash is sent to script to make unique file name.
+def get_hashed_filename(input_path):
+    if input_path.startswith(('http://', 'https://')):
+        return hashlib.md5(input_path.encode()).hexdigest()
+    else:
+        with open(input_path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+
 @app.route("/outputs/<filename>")
 def serve_output(filename):
     return send_from_directory(app.config["OUTPUT_FOLDER"], filename)
@@ -29,6 +39,10 @@ def index():
 
 @app.route('/', methods=['POST'])
 def predict_file():
+    mode = None
+    input_path = None
+    file_hash = None
+    
     if request.content_type == "application/json":
         data = request.get_json()
         video_url = data.get("videoUrl")
@@ -36,8 +50,9 @@ def predict_file():
             return jsonify({"error": "No URL shared"}), 400
 
         mode = "video"
-        command = [sys.executable, "inference.py", mode, video_url]
-
+        input_path = video_url
+        file_hash = get_hashed_filename(video_url)
+        
     elif "file" in request.files:
         file = request.files['file']
         file_ext = os.path.splitext(file.filename)[-1].lower()
@@ -45,41 +60,49 @@ def predict_file():
 
         input_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(input_path)
-
-        command = [sys.executable, "inference.py", mode, input_path]
-
-    else: 
+        file_hash = get_hashed_filename(input_path)
+    else:
         return jsonify({"error": "No valid input provided"}), 400
+    
+    output_ext = 'mp4' if mode == 'video' else 'jpg'
+    output_filename = f'output_{file_hash}.{output_ext}'
+    stats_filename = f'logo_stats_{file_hash}.json'
+    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+    stats_path = os.path.join(OUTPUT_FOLDER, stats_filename)
 
-    cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference'))
-
-    try:
-        subprocess.run(command, check=True, cwd=cwd)
-    except subprocess.CalledProcessError as e:
-        return jsonify({"error": f"Inference failed: {str(e)}"}), 500
-
-    # Output file paths
-    raw_output = os.path.join(cwd, 'output.jpg' if mode == 'image' else 'output.mp4')
-    final_output = os.path.join(OUTPUT_FOLDER, 'output.jpg' if mode == 'image' else 'output.mp4')
-
-    if not os.path.exists(raw_output):
-        return jsonify({"error": f"Output file {raw_output} not found!"}), 500
-
-
-    shutil.move(raw_output, final_output)
-    # Fetching logo stats
-    stats_path = os.path.join(cwd, 'logo_stats.json')
-    stats_data = {}
-    if os.path.exists(stats_path):
+    if os.path.exists(output_path) and os.path.exists(stats_path):
         with open(stats_path, "r") as f:
             stats_data = json.load(f)
+        return jsonify({
+            "fileUrl": f"/outputs/{output_filename}",
+            "stats": stats_data
+        })
 
-    response_data = {
-        "fileUrl": f"/outputs/{os.path.basename(final_output)}",
+    cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference'))
+    command = [sys.executable, 'inference.py', mode, input_path, file_hash]
+
+    try:
+        result = subprocess.run(command, check=True, cwd=cwd)
+
+        if not os.path.exists(output_path):
+            return jsonify({
+            "error": "Output file not created",
+            "details": result.stderr
+            }), 500
+        
+        # Fetching logo stats
+        stats_data = {}
+        if os.path.exists(stats_path):
+            with open(stats_path, "r") as f:
+                stats_data = json.load(f)
+
+        return jsonify({
+        "fileUrl": f"/outputs/{output_filename}",
         "stats": stats_data
-    }
-
-    return jsonify(response_data)
+        })
+    
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Inference failed: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -2,5 +2,6 @@
 inference/output.mp4
 inference/videoframe_7040.png
 inference/logo_stats.json
+inference/__pycache__
 backend/uploads/*
 backend/outputs/*
