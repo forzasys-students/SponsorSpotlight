@@ -9,7 +9,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const submitButton = document.getElementById("submitButton");
     const loadingCircle = document.getElementById("loadingCircle");
     const dropdown = document.getElementById("categoryDropdown");
-       
+    const imageChart = document.getElementById("imageChart");
+    const videoChart = document.getElementById("videoChart");
+    const chartsContainer = document.getElementById("chartsContainer");
+    const filterContainer = document.getElementById("filterContainer");
+    const displayContainer = document.getElementById("displayContainer");
+    
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
     loadingMsg.style.color = "#007bff";
@@ -18,17 +23,25 @@ document.addEventListener("DOMContentLoaded", function () {
     form.appendChild(loadingMsg);
 
     let responseData;
+    let mediaType;
 
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
         errorMsg.textContent = "";
-
+        
         submitButton.disabled = true;
         submitButton.style.backgroundColor = "#ccc";
         submitButton.style.cursor = "not-allowed";
         loadingMsg.style.display = "block";
         loadingCircle.style.display = "block";
 
+        //Reset UI
+        imageView.removeAttribute("src");
+        videoPlayer.removeAttribute("src");
+        displayContainer.style.display = "none";
+        chartsContainer.style.display = "none";
+        filterContainer.style.display = "none";
+            
         let response;
         try {
             if (urlInput.value.trim()) {
@@ -61,20 +74,23 @@ document.addEventListener("DOMContentLoaded", function () {
             const stats = responseData.stats;
 
             // Updating media section
+            displayContainer.style.display = "block";
             if (mediaUrl.endsWith(".jpg") || mediaUrl.endsWith(".jpeg") || mediaUrl.endsWith(".png")) {
                 imageView.src = mediaUrl;
                 imageView.style.display = "block";
                 videoPlayer.style.display = "none";
+                mediaType = "image";
             } else if (mediaUrl.endsWith(".mp4")) {
                 videoPlayer.src = mediaUrl;
                 videoPlayer.style.display = "block";
                 imageView.style.display = "none";
                 videoPlayer.play();
+                mediaType = "video";
             } else {
                 throw new Error("Unknown media type.");
             }
 
-            updateUIWithData(stats);
+            updateUIWithData(stats, mediaType);
             exportExcel.style.display = "block";
         } catch (error) {
             errorMsg.textContent = error.message;
@@ -117,39 +133,64 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function updateUIWithData(data) {
-        const stats = data;
-
+    function updateUIWithData(stats, mediaType) {
         // Prepare data for Plotly
         const labels = Object.keys(stats);
+        if (labels.length === 0) {
+            errorMsg.textContent = "No logos detected";
+            return;
+        }
 
-        /* Sort data after percentages in ascending order (Plotly will showcase largest value at the top).
-        All stats are shown in the same chart, but bars are based on % of exposure compared to total time.
-        */
-        const sortedData = labels.map((label, i) => ({
-            label,
-            percentage: stats[label].percentage,
-            time: stats[label].time,
-            frames: stats[label].frames,
-            detections: stats[label].detections
-        })).sort((a, b) => a.percentage - b.percentage);
+        chartsContainer.style.display = "block";
+        filterContainer.style.display = "block";
 
-        const sortedLabels = sortedData.map(item => item.label);
-        const sortedPercentages = sortedData.map(item => item.percentage);
-        
-        // Update charts
-        updateChart(sortedLabels, sortedPercentages, stats);
-        
-        document.getElementById("categoryDropdown").style.display = "block";
-        document.getElementById("infoTextDropdown").style.display = "block";
-        document.getElementById("filterButton").style.display = "block";
-        document.getElementById("resetButton").style.display = "block";
-        
-        //Update dropdown menu
-        updateDropdown(labels);
+        if (mediaType === "image") {
+
+            const sortedData = labels.map((label, i) => ({
+                label,
+                detections: stats[label].detections,
+            })).sort((a, b) => a.detections - b.detections);
+
+            const sortedLabels = sortedData.map(item => item.label);
+            const sortedDetections = sortedData.map(item => item.detections);
+
+            videoChart.style.display = "none";
+            imageChart.style.display = "block";
+
+            // Update Image Chart
+            updateImageChart(sortedLabels, sortedDetections);
+
+            //Update dropdown menu
+            updateDropdown(labels);
+
+        } else {
+
+            /* Sort data after percentages in ascending order (Plotly will showcase largest value at the top).
+            All stats are shown in the same chart, but bars are based on % of exposure compared to total time.
+            */
+            const sortedData = labels.map((label, i) => ({
+                label,
+                percentage: stats[label].percentage,
+                time: stats[label].time,
+                frames: stats[label].frames,
+                detections: stats[label].detections
+            })).sort((a, b) => a.percentage - b.percentage);
+
+            const sortedLabels = sortedData.map(item => item.label);
+            const sortedPercentages = sortedData.map(item => item.percentage);
+
+            imageChart.style.display = "none";
+            videoChart.style.display = "block";
+
+            // Update chart
+            updateVideoChart(sortedLabels, sortedPercentages, stats);
+
+            //Update dropdown menu
+            updateDropdown(labels);
+        }
     }
 
-    function updateChart(labels, percentages, stats) {
+    function updateVideoChart(labels, percentages, stats) {
         const wrappedLabels = wrapLabels(labels);
 
         //Shorter formatted text for bars
@@ -220,23 +261,93 @@ document.addEventListener("DOMContentLoaded", function () {
             ]
         };
 
-        Plotly.newPlot('chart', [trace], layout);
+        Plotly.purge('imageChart');
+        Plotly.purge('videoChart');
+        Plotly.newPlot('videoChart', [trace], layout);
+    }
+
+    function updateImageChart(labels, detections) {
+        const wrappedLabels = wrapLabels(labels);
+
+        // Hover text for each bar
+        const hoverTexts = labels.map((logo, index) =>
+            `<b>${logo}</b><br>Detections: ${detections[index]}`);
+
+        const trace = {
+            x: detections,
+            y: wrappedLabels,
+            type: 'bar',
+            orientation: 'h',
+            marker: { color: 'rgba(54, 162, 235, 0.6)' },
+            hoverinfo: 'text',
+            hovertext: hoverTexts
+        };
+
+        const layout = {
+            title: 'Logo Detections in Image',
+            height: Math.max(400, labels.length * 40),
+            width: 1000,
+            margin: { l: 200, r: 50, t: 50, b: 50 },
+            xaxis: {
+                title: 'Number of Detections',
+                showgrid: true,
+                gridcolor: '#ddd'
+            },
+            yaxis: {
+                showticklabels: false
+            },
+            annotations: [
+                ...wrappedLabels.map((label, index) => ({
+                    x: -0.01,
+                    y: index,
+                    xref: 'paper',
+                    yref: 'y',
+                    text: label,
+                    showarrow: false,
+                    font: { size: 12 },
+                    xanchor: 'right',
+                    yanchor: 'middle'
+                })),
+                ...detections.map((detection, index) => ({
+                    x: detection,
+                    y: index,
+                    text: `${detection} detections`,
+                    showarrow: false,
+                    font: { size: 12 },
+                    xanchor: 'left',
+                    yanchor: 'middle'
+                }))
+            ]
+        };
+
+        // Clear previous chart if exists
+        Plotly.purge('imageChart');
+        Plotly.purge('videoChart');
+        Plotly.newPlot('imageChart', [trace], layout);
     }
 
     // Option to export data to Excel file
-    exportExcel.addEventListener("click", async() => {
+    exportExcel.addEventListener("click", async () => {
         if (!responseData || !responseData.stats) {
             throw new Error("No data to export.");
         }
 
-        const excelHeader = ["Logo", "Percentage", "Time (s)", "Frames", "Detections"];
-        const dataForExcel = Object.keys(responseData.stats).map(logo => ({
-            Logo: logo,
-            Percentage: responseData.stats[logo].percentage + "%",
-            "Time (s)": responseData.stats[logo].time,
-            Frames: responseData.stats[logo].frames,
-            Detections: responseData.stats[logo].detections
-        }));
+        const excelHeader = mediaType === "image" 
+        ? ["Logo", "Detections"] 
+        : ["Logo", "Percentage", "Time (s)", "Frames", "Detections"];
+
+        const dataForExcel = Object.keys(responseData.stats).map(logo => {
+            const base = {
+                Logo: logo,
+                Detections: responseData.stats[logo].detections
+            };
+            if (mediaType === "video") {
+                base.Percentage = responseData.stats[logo].percentage + "%";
+                base["Time (s)"] = responseData.stats[logo].time;
+                base.Frames = responseData.stats[logo].frames;
+            }
+            return base;
+        });
 
         const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
@@ -247,7 +358,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         let wscols = []
         excelHeader.map(arr => {
-        wscols.push({ wch: arr.length + 5 })
+            wscols.push({ wch: arr.length + 5 })
         })
         worksheet["!cols"] = wscols;
 
@@ -264,18 +375,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 acc[logo] = responseData.stats[logo];
                 return acc;
             }, {});
-    
-        updateUIWithData(filteredData); 
+
+        updateUIWithData(filteredData);
     });
 
     document.getElementById("resetButton").addEventListener("click", function () {
-        updateUIWithData(responseData.stats); 
+        updateUIWithData(responseData.stats);
     });
 
     //Updating dropdown with new logos
     function updateDropdown(labels) {
-        dropdown.innerHTML = ""; 
-    
+        dropdown.innerHTML = "";
+
         labels.forEach(label => {
             const option = document.createElement("option");
             option.value = label;

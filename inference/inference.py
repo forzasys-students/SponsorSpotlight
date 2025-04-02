@@ -7,6 +7,7 @@ import numpy as np
 import random
 import json
 from collections import defaultdict, Counter
+from logo_groups import LOGO_GROUPS
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -102,15 +103,20 @@ def process_image(image_path):
     output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
 
-    logo_stats = {
-        logo: {"frames": 1, "time": 0.0, "detections": count}
-        for logo, count in logo_count.items() if count > 0
-    }
+    aggregated_stats = defaultdict(lambda: {"detections": 0})
+
+    for logo, count in logo_count.items():
+        if count > 0:
+            main_logo = LOGO_GROUPS.get(logo, logo)
+            aggregated_stats[main_logo]["detections"] += count
     
+    aggregated_stats = dict(aggregated_stats)
+
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
-        json.dump(logo_stats, f, indent=4)
-    return logo_stats
+        json.dump(aggregated_stats, f, indent=4)
+        
+    return aggregated_stats
 
 # Function to process video and track statistics
 def process_video(video_path):
@@ -122,7 +128,7 @@ def process_video(video_path):
     frame_time = 1 / fps
     total_video_time = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
 
-    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -152,16 +158,18 @@ def process_video(video_path):
     cap.release()
     out.release()
 
+    aggregated_stats = aggregate_stats(logo_stats)
+
     # Round time values to 2 decimal places, and calculating percentages
-    for logo, stats in logo_stats.items():
+    for logo, stats in aggregated_stats.items():
         stats["time"] = round(stats["time"], 2)
-        stats["percentage"] = round(stats["time"] / total_video_time * 100, 2)
+        stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
 
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
-        json.dump(logo_stats, f, indent=4)
+        json.dump(aggregated_stats, f, indent=4)
 
-    return logo_stats
+    return aggregated_stats
     
 # Function to check if a path is a URL
 def is_url(path):
@@ -195,7 +203,7 @@ def process_video_stream(url):
     frame_time = 1 / fps
     frame_count = 0    
 
-    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
 
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
@@ -232,17 +240,33 @@ def process_video_stream(url):
     pipe.wait()
     out.release()
 
+    aggregated_stats = aggregate_stats(logo_stats)
+
     # Round time values to 2 decimal places, and calculating percentages
-    for logo, stats in logo_stats.items():
+    for logo, stats in aggregated_stats.items():
         stats["time"] = round(stats["time"], 2)
-        stats["percentage"] = round(stats["time"] / total_video_time * 100, 2)
+        stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
 
     stats_path = "logo_stats.json"
     with open(stats_path, "w") as f:
-        json.dump(logo_stats, f, indent=4)
+        json.dump(aggregated_stats, f, indent=4)
 
-    print('Annotated video saved to output.mp4')
-    return logo_stats
+    return aggregated_stats
+
+# Function to aggregate different versions of logos using the logo_groups.py script
+def aggregate_stats(logo_stats):
+    aggregated = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
+    
+    for logo, stats in logo_stats.items():
+        # Get the main logo name or use the original if not in mapping
+        main_logo = LOGO_GROUPS.get(logo, logo)
+        
+        aggregated[main_logo]["frames"] += stats["frames"]
+        aggregated[main_logo]["time"] += stats["time"]
+        aggregated[main_logo]["detections"] += stats["detections"]
+        # Percentage will be recalculated later
+    
+    return aggregated
 
 # Main function
 if __name__ == '__main__':

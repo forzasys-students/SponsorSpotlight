@@ -1,3 +1,6 @@
 .DS_Store
 inference/output.mp4
 inference/videoframe_7040.png
+inference/logo_stats.json
+backend/uploads/*
+backend/outputs/*
