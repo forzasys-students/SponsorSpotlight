@@ -2,9 +2,12 @@ import hashlib
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import sys
-import subprocess
 import json
-import shutil 
+from backend.progress_manager import ProgressManager, ProgressStage
+from flask_socketio import SocketIO
+from inference.inference import run_from_app
+
+progress = ProgressManager()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -29,6 +32,19 @@ def get_hashed_filename(input_path):
         with open(input_path, 'rb') as f:
             return hashlib.md5(f.read()).hexdigest()
 
+# SocketIO callback. Used for tracking progress during process
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+def progress_callback(data):
+    socketio.emit('progress_update', data)
+
+progress.register_callback(progress_callback)
+progress_instance = progress
+
+@app.route('/progress')
+def get_progress():
+    return jsonify(progress.get_progress())
+
 @app.route("/outputs/<filename>")
 def serve_output(filename):
     return send_from_directory(app.config["OUTPUT_FOLDER"], filename)
@@ -39,6 +55,11 @@ def index():
 
 @app.route('/', methods=['POST'])
 def predict_file():
+    progress.update_progress(
+        ProgressStage.RECEIVING_MEDIA,
+        "Media received"
+    )
+
     mode = None
     input_path = None
     file_hash = None
@@ -64,6 +85,11 @@ def predict_file():
     else:
         return jsonify({"error": "No valid input provided"}), 400
     
+    progress.update_progress(
+        ProgressStage.CHECKING_CACHE,
+        "Checking for cached results"
+    )
+
     output_ext = 'mp4' if mode == 'video' else 'jpg'
     output_filename = f'output_{file_hash}.{output_ext}'
     stats_filename = f'logo_stats_{file_hash}.json'
@@ -71,6 +97,10 @@ def predict_file():
     stats_path = os.path.join(OUTPUT_FOLDER, stats_filename)
 
     if os.path.exists(output_path) and os.path.exists(stats_path):
+        progress.update_progress(
+            ProgressStage.COMPLETE,
+            "Cached results found, returning"
+        )
         with open(stats_path, "r") as f:
             stats_data = json.load(f)
         return jsonify({
@@ -78,11 +108,8 @@ def predict_file():
             "stats": stats_data
         })
 
-    cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'inference'))
-    command = [sys.executable, 'inference.py', mode, input_path, file_hash]
-
     try:
-        result = subprocess.run(command, check=True, cwd=cwd)
+        result = run_from_app(mode, input_path, file_hash)
 
         if not os.path.exists(output_path):
             return jsonify({
@@ -101,8 +128,8 @@ def predict_file():
         "stats": stats_data
         })
     
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         return jsonify({"error": f"Inference failed: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)

@@ -3,12 +3,57 @@ import cv2
 import torch
 from ultralytics import YOLO
 import os
+import sys
 import subprocess
 import numpy as np
 import random
 import json
 from collections import defaultdict, Counter
-from logo_groups import LOGO_GROUPS
+from .logo_groups import LOGO_GROUPS
+from backend.progress_manager import ProgressStage
+
+sys.path.append('/Users/henrik/Documents/GitHub/SponsorSpotlight')
+
+progress = None
+model_path = ""
+model = None
+
+def run_from_app(mode, input_path, file_hash):
+    global progress, model_path
+    from backend.app import progress_instance
+    progress = progress_instance
+
+    model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
+
+    try:
+        loadModel()
+
+        # Updating progress
+        progress.update_progress(
+            ProgressStage.MODEL_READY,
+            "Loading model"
+        )
+    except Exception as e:
+        progress.update_progress(
+            ProgressStage.ERROR,
+            f"Failed to load model: {str(e)}"
+        )
+
+    # Start progress update
+    progress.update_progress(ProgressStage.INFERENCE_START, "Starting processing")
+
+    if mode == 'image':
+        process_image(input_path, file_hash)
+    elif mode == 'video':
+        if is_url(input_path):
+            process_video_stream(input_path, file_hash)
+        else:
+            process_video(input_path, file_hash)
+    else:
+        print('Invalid mode. Use "image" or "video".')
+        progress.update_progress(ProgressStage.ERROR, "Invalid mode")
+        return
+
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,8 +62,11 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(os.path.dirname(script_dir))  
 OUTPUT_DIR = os.path.join(BASE_DIR, 'SponsorSpotlight', 'backend', 'outputs')
 
-# Load the model
-model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
+def loadModel():
+    global model_path, model
+    # Load the model on the best available device
+    device = get_device()
+    model = YOLO(model_path).to(device)
 
 # Determine the best available device
 def get_device():
@@ -28,10 +76,6 @@ def get_device():
         return 'mps'
     else:
         return 'cpu'
-
-# Load the model on the best available device
-device = get_device()
-model = YOLO(model_path).to(device)
 
 # Load class names
 classes_path = os.path.join(script_dir, 'classes.txt')
@@ -91,6 +135,8 @@ def annotate_frame(frame, results):
 
 # Function to process image
 def process_image(image_path, file_hash):
+    global progress
+
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.jpg')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
@@ -99,6 +145,15 @@ def process_image(image_path, file_hash):
     results = model(image)
 
     logo_count = Counter()
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=1,
+        total_frames=1,
+        progress_percentage=100
+    )
+
     for result in results:
         obb = result.obb
         if obb is None:
@@ -107,9 +162,15 @@ def process_image(image_path, file_hash):
             cls = int(obb.cls[i])
             class_name = class_names[cls]
             logo_count[class_name] += 1
-
+    
     annotated_image = annotate_frame(image, results)
     cv2.imwrite(output_path, annotated_image)
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
 
     aggregated_stats = defaultdict(lambda: {"detections": 0})
 
@@ -123,11 +184,19 @@ def process_image(image_path, file_hash):
     stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
+    
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
         
     return aggregated_stats
 
 # Function to process video and track statistics
 def process_video(video_path, file_hash):
+    global progress
+
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
@@ -138,14 +207,28 @@ def process_video(video_path, file_hash):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_time = 1 / fps
+    frame_count = 0
     total_video_time = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    update_interval = max(int(total_frames * 10 / 100), 1) # Updating every 10% of frame progress made
+
     logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=frame_count,
+        total_frames=total_frames,
+        progress_percentage=0
+    ) 
 
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
+    
+        frame_count += 1
         results = model(frame)
 
         logo_count = Counter()
@@ -167,8 +250,25 @@ def process_video(video_path, file_hash):
 
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
+
+        if frame_count % update_interval == 0:
+            progress_percentage = (frame_count / total_frames) * 100
+            progress.update_progress(
+                ProgressStage.INFERENCE_PROGRESS, 
+                f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
+                frame = frame_count,
+                total_frames = total_frames,
+                progress_percentage = progress_percentage
+            )
+
     cap.release()
     out.release()
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
 
     aggregated_stats = aggregate_stats(logo_stats)
 
@@ -181,6 +281,12 @@ def process_video(video_path, file_hash):
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
 
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
+
     return aggregated_stats
     
 # Function to check if a path is a URL
@@ -190,6 +296,8 @@ def is_url(path):
 # Function to process video stream from URL
 # Use ffmpeg to select the highest quality stream
 def process_video_stream(url, file_hash):
+    global progress
+
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
@@ -217,9 +325,21 @@ def process_video_stream(url, file_hash):
 
     fps = 30.0
     frame_time = 1 / fps
-    frame_count = 0    
+    frame_count = 0
+
+    cap = cv2.VideoCapture(url)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()    
 
     logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=frame_count,
+        total_frames=total_frames,
+        progress_percentage=0
+    ) 
 
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
@@ -252,9 +372,19 @@ def process_video_stream(url, file_hash):
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
 
+        if frame_count % (total_frames // 100) == 0:
+            progress_percentage = (frame_count / total_frames) * 100
+            progress.update_progress(ProgressStage.INFERENCE_PROGRESS, f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)")
+
     pipe.stdout.close()
     pipe.wait()
     out.release()
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
 
     aggregated_stats = aggregate_stats(logo_stats)
 
@@ -266,6 +396,12 @@ def process_video_stream(url, file_hash):
     stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
 
     return aggregated_stats
 
@@ -282,25 +418,3 @@ def aggregate_stats(logo_stats):
         aggregated[main_logo]["detections"] += stats["detections"]
     
     return aggregated
-
-# Main function
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 3:
-        print('Usage: python inference.py <image|video> <path>')
-        sys.exit(1)
-
-    mode = sys.argv[1]
-    path = sys.argv[2]
-    hash = sys.argv[3]
-
-    if mode == 'image':
-        process_image(path, hash)
-    elif mode == 'video':
-        if is_url(path):
-            process_video_stream(path, hash)
-        else:
-            process_video(path, hash)
-    else:
-        print('Invalid mode. Use "image" or "video".')
-        sys.exit(1)

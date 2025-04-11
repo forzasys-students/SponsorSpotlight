@@ -60,6 +60,57 @@ h1 {
     margin: 0 auto;
 }
 
+/* Progress bar */
+#progress-container {
+    display: none;
+    position: relative;
+    width: 100%; 
+    height: 50px; 
+    background-color: transparent;
+    margin: 20px 0;
+}
+
+.custom-progress-bar {
+    display: flex;
+    width: 100%; 
+    height: 30px;
+    background-color: #b6b2b2;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-segment {
+    flex: 1;
+    border-right: 1px solid white;
+    transition: background-color 0.3s;
+}
+
+.active {
+    background-color: #ecf818; 
+}
+
+.completed {
+    background-color: #4CAF50; 
+}
+
+.error {
+    background-color: red;
+}
+
+.stage-labels {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    width: 100%;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+}
+
+#stage5 {
+    font-size: 12px; 
+} 
 
 
 

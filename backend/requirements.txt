@@ -3,3 +3,4 @@ torch
 ultralytics
 opencv-python
 numpy
+setuptools

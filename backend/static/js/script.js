@@ -14,7 +14,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const chartsContainer = document.getElementById("chartsContainer");
     const filterContainer = document.getElementById("filterContainer");
     const displayContainer = document.getElementById("displayContainer");
-    
+    const progressContainer = document.getElementById('progress-container');
+
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
     loadingMsg.style.color = "#007bff";
@@ -25,6 +26,9 @@ document.addEventListener("DOMContentLoaded", function () {
     let responseData;
     let mediaType;
 
+    const socket = io('http://127.0.0.1:5000');
+    let progressSegments = [];
+
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
         errorMsg.textContent = "";
@@ -34,6 +38,7 @@ document.addEventListener("DOMContentLoaded", function () {
         submitButton.style.cursor = "not-allowed";
         loadingMsg.style.display = "block";
         loadingCircle.style.display = "block";
+        progressContainer.style.display = 'block';
 
         //Reset UI
         imageView.removeAttribute("src");
@@ -103,6 +108,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 submitButton.disabled = false;
                 submitButton.style.backgroundColor = "";
                 submitButton.style.cursor = "pointer";
+                progressContainer.style.display = "none";
 
                 fileInput.value = "";
                 urlInput.value = "";
@@ -399,4 +405,61 @@ document.addEventListener("DOMContentLoaded", function () {
             dropdown.appendChild(option);
         });
     }
+
+    //Progress tracking
+    progressSegments = [
+        document.getElementById('stage1'),
+        document.getElementById('stage2'), 
+        document.getElementById('stage3'),
+        document.getElementById('stage4'),
+        document.getElementById('stage5'),
+        document.getElementById('stage6'),
+        document.getElementById('stage7'),
+    ];
+
+    socket.on('progress_update', (data) => {
+        console.log("Progress update received:", data);
+        updateProgressDisplay(data);
+    });
+
+    function updateProgressDisplay(data) {
+       // progressBar.className = `progress-bar ${getStageClass(data.stage)}`;
+
+        progressSegments.forEach(segment => {
+            segment.classList.remove('active', 'completed', 'error');
+        });
+
+        // Handle error case
+        if (data.stage === -1) {
+            progressSegments.forEach(segment => {
+                segment.classList.add('error');
+            });
+            return;
+        }
+
+        // Mark completed segments
+        for (let i = 0; i < data.stage; i++) {
+            if (i < progressSegments.length) {
+                progressSegments[i].classList.add('completed');
+            }
+        }
+    
+        // Mark current active segment
+        if (data.stage < progressSegments.length) {
+            progressSegments[data.stage].classList.add('active');
+        }
+    
+        // Special case when all stages are done
+        if (data.stage >= progressSegments.length) {
+            progressSegments.forEach(segment => {
+                segment.classList.add('completed');
+            });
+        }
+
+        // If current stage is INFERENCE_PROGRESS, update with frame progress
+        if (data.stage === 4) {
+            const progressText = `Frame ${data.frame} of ${data.total_frames} (${Math.round(data.progress_percentage)}%)`;
+            document.getElementById('stage5').textContent = progressText;
+        }
+    };
 });
