@@ -5,3 +5,4 @@ inference/logo_stats.json
 inference/__pycache__
 backend/uploads/*
 backend/outputs/*
+backend/__pycache__

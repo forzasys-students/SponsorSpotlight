@@ -275,7 +275,10 @@ def process_video(video_path, file_hash):
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
         stats["time"] = round(stats["time"], 2)
-        stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
+        percentage = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
+        if percentage > 100:
+            percentage = 100
+        stats["percentage"] = percentage
 
     stats_path = stats_file
     with open(stats_path, "w") as f:
@@ -391,8 +394,11 @@ def process_video_stream(url, file_hash):
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
         stats["time"] = round(stats["time"], 2)
-        stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
-
+        percentage = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
+        if percentage > 100:
+            percentage = 100
+        stats["percentage"] = percentage
+    
     stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
