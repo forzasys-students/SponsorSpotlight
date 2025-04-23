@@ -11,6 +11,8 @@ import json
 from collections import defaultdict, Counter
 from .logo_groups import LOGO_GROUPS
 from backend.progress_manager import ProgressStage
+import time
+from backend.timing_logger import timing_logger
 
 sys.path.append('/Users/henrik/Documents/GitHub/SponsorSpotlight')
 
@@ -26,7 +28,10 @@ def run_from_app(mode, input_path, file_hash):
     model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
 
     try:
+        start_loadModel = time.perf_counter()
         loadModel()
+        end_loadModel = time.perf_counter()
+        timing_logger.info(f"Loading model - {end_loadModel - start_loadModel:2f}")
 
         # Updating progress
         progress.update_progress(
@@ -136,13 +141,17 @@ def annotate_frame(frame, results):
 # Function to process image
 def process_image(image_path, file_hash):
     global progress
-
+    start_process_image = time.perf_counter()
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.jpg')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
 
     image = cv2.imread(image_path)
+
+    start_model_image = time.perf_counter()
     results = model(image)
+    end_model_image = time.perf_counter()
+    timing_logger.info(f"Run model on image - {end_model_image - start_model_image:2f}")
 
     logo_count = Counter()
 
@@ -154,6 +163,7 @@ def process_image(image_path, file_hash):
         progress_percentage=100
     )
 
+    start_generate_stats = time.perf_counter()
     for result in results:
         obb = result.obb
         if obb is None:
@@ -162,8 +172,14 @@ def process_image(image_path, file_hash):
             cls = int(obb.cls[i])
             class_name = class_names[cls]
             logo_count[class_name] += 1
-    
+    end_generate_stats = time.perf_counter()
+    timing_logger.info(f"Generating logo stats from model result - {end_generate_stats - start_generate_stats:2f}")
+
+    start_annotate_image = time.perf_counter()
     annotated_image = annotate_frame(image, results)
+    end_annotate_image = time.perf_counter()
+    timing_logger.info(f"Annotating image model results - {end_annotate_image - start_annotate_image:2f}")
+
     cv2.imwrite(output_path, annotated_image)
 
     # Updating progress
@@ -172,6 +188,7 @@ def process_image(image_path, file_hash):
         "Aggregating stats"
     )
 
+    start_aggregating_stats = time.perf_counter()
     aggregated_stats = defaultdict(lambda: {"detections": 0})
 
     for logo, count in logo_count.items():
@@ -180,6 +197,8 @@ def process_image(image_path, file_hash):
             aggregated_stats[main_logo]["detections"] += count
     
     aggregated_stats = dict(aggregated_stats)
+    end_aggregating_stats = time.perf_counter()
+    timing_logger.info(f"Aggregating image stats - {end_aggregating_stats - start_aggregating_stats:2f}")
 
     stats_path = stats_file
     with open(stats_path, "w") as f:
@@ -190,13 +209,16 @@ def process_image(image_path, file_hash):
         ProgressStage.COMPLETE,
         "Inference finished, returning"
     )
-        
+    end_process_image = time.perf_counter()
+    timing_logger.info(f"Total Process Image time - {end_process_image - start_process_image:2f}")
     return aggregated_stats
 
 # Function to process video and track statistics
 def process_video(video_path, file_hash):
     global progress
+    start_process_video = time.perf_counter()
 
+    start_initial_video_processing = time.perf_counter()
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
@@ -214,6 +236,8 @@ def process_video(video_path, file_hash):
     update_interval = max(int(total_frames * 10 / 100), 1) # Updating every 10% of frame progress made
 
     logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+    end_initial_video_processing = time.perf_counter()
+    timing_logger.info(f"Initial video processing - {end_initial_video_processing - start_initial_video_processing:2f}")
 
     progress.update_progress(
         ProgressStage.INFERENCE_PROGRESS,
@@ -222,7 +246,7 @@ def process_video(video_path, file_hash):
         total_frames=total_frames,
         progress_percentage=0
     ) 
-
+    start_video_annotation_model_stats = time.perf_counter()
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -263,14 +287,20 @@ def process_video(video_path, file_hash):
 
     cap.release()
     out.release()
+    end_video_annotation_model_stats = time.perf_counter()
+    timing_logger.info(
+        f"Running model on frames, annotating and generating stats (for video) - {end_video_annotation_model_stats - start_video_annotation_model_stats:2f}"
+        )
 
     # Updating progress
     progress.update_progress(
         ProgressStage.POST_PROCESSING,
         "Aggregating stats"
     )
-
+    start_aggregate_video_stats = time.perf_counter()
     aggregated_stats = aggregate_stats(logo_stats)
+    end_aggregate_video_stats = time.perf_counter()
+    timing_logger.info(f"Aggregating video stats - {end_aggregate_video_stats - start_aggregate_video_stats:2f}")
 
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
@@ -286,7 +316,8 @@ def process_video(video_path, file_hash):
         ProgressStage.COMPLETE,
         "Inference finished, returning"
     )
-
+    end_process_video = time.perf_counter()
+    timing_logger.info(f"Total Process Video time - {end_process_video - start_process_video:2f}")
     return aggregated_stats
     
 # Function to check if a path is a URL
@@ -297,6 +328,10 @@ def is_url(path):
 # Use ffmpeg to select the highest quality stream
 def process_video_stream(url, file_hash):
     global progress
+
+    start_process_video_url = time.perf_counter()
+
+    start_initial_video_url_processing = time.perf_counter()
 
     #Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
@@ -316,7 +351,7 @@ def process_video_stream(url, file_hash):
 
     # Use ffmpeg to get the best quality stream
     ffmpeg_command = [
-        'ffmpeg', '-i', url, '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
+        'ffmpeg', '-i', url, '-t', '10', '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
     ]
     pipe = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, bufsize=10**8)
     width, height = 1280, 720  # Set the expected width and height of the video
@@ -340,10 +375,17 @@ def process_video_stream(url, file_hash):
         total_frames=total_frames,
         progress_percentage=0
     ) 
+    end_initial_video_url_processing = time.perf_counter()
+    timing_logger.info(
+        f"Initial video URL processing - {end_initial_video_url_processing - start_initial_video_url_processing:2f}"
+        )
+    
+    start_video_url_annotation_model_stats = time.perf_counter()
 
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
-        if not raw_image:
+        #if not raw_image:
+        if len(raw_image) < width * height * 3:
             break
         frame = np.frombuffer(raw_image, dtype='uint8').reshape((height, width, 3))
         frame_count += 1
@@ -379,15 +421,19 @@ def process_video_stream(url, file_hash):
     pipe.stdout.close()
     pipe.wait()
     out.release()
-
+    end_video_url_annotation_model_stats = time.perf_counter()
+    timing_logger.info(
+        f"Running model on frames, annotating and generating stats (for video url) - {end_video_url_annotation_model_stats - start_video_url_annotation_model_stats:2f}"
+        )
     # Updating progress
     progress.update_progress(
         ProgressStage.POST_PROCESSING,
         "Aggregating stats"
     )
-
+    start_aggregate_video_stats = time.perf_counter()
     aggregated_stats = aggregate_stats(logo_stats)
-
+    end_aggregate_video_stats = time.perf_counter()
+    timing_logger.info(f"Aggregating video stats - {end_aggregate_video_stats - start_aggregate_video_stats:2f}")
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
         stats["time"] = round(stats["time"], 2)
@@ -402,7 +448,8 @@ def process_video_stream(url, file_hash):
         ProgressStage.COMPLETE,
         "Inference finished, returning"
     )
-
+    end_process_video_url = time.perf_counter()
+    timing_logger.info(f"Total Process Video from URL time - {end_process_video_url - start_process_video_url:2f}")
     return aggregated_stats
 
 # Function to aggregate different versions of logos using the logo_groups.py script

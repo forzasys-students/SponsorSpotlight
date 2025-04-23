@@ -6,6 +6,8 @@ import json
 from backend.progress_manager import ProgressManager, ProgressStage
 from flask_socketio import SocketIO
 from inference.inference import run_from_app
+import time
+from .timing_logger import timing_logger
 
 progress = ProgressManager()
 
@@ -55,6 +57,7 @@ def index():
 
 @app.route('/', methods=['POST'])
 def predict_file():
+    start_total_time_post_to_return = time.perf_counter()
     progress.update_progress(
         ProgressStage.RECEIVING_MEDIA,
         "Media received"
@@ -64,6 +67,7 @@ def predict_file():
     input_path = None
     file_hash = None
     
+    start_check_url_file_type = time.perf_counter()
     if request.content_type == "application/json":
         data = request.get_json()
         video_url = data.get("videoUrl")
@@ -72,8 +76,14 @@ def predict_file():
 
         mode = "video"
         input_path = video_url
+        end_check_url_file_type = time.perf_counter()
+        timing_logger.info(
+            f"Checking url / file type and saving path - {end_check_url_file_type - start_check_url_file_type:2f}"
+            )
+        start_hash_filename = time.perf_counter()
         file_hash = get_hashed_filename(video_url)
-        
+        end_hash_filename = time.perf_counter()
+        timing_logger.info(f"Hashing filename - {end_hash_filename - start_hash_filename:2f}")
     elif "file" in request.files:
         file = request.files['file']
         file_ext = os.path.splitext(file.filename)[-1].lower()
@@ -81,7 +91,15 @@ def predict_file():
 
         input_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(input_path)
+        end_check_url_file_type = time.perf_counter()
+        timing_logger.info(
+            f"Checking url / file type and saving path - {end_check_url_file_type - start_check_url_file_type:2f}"
+            )
+
+        start_hash_filename = time.perf_counter()
         file_hash = get_hashed_filename(input_path)
+        end_hash_filename = time.perf_counter()
+        timing_logger.info(f"Hashing filename - {end_hash_filename - start_hash_filename:2f}")
     else:
         return jsonify({"error": "No valid input provided"}), 400
     
@@ -90,6 +108,7 @@ def predict_file():
         "Checking for cached results"
     )
 
+    start_check_cache = time.perf_counter()
     output_ext = 'mp4' if mode == 'video' else 'jpg'
     output_filename = f'output_{file_hash}.{output_ext}'
     stats_filename = f'logo_stats_{file_hash}.json'
@@ -101,12 +120,18 @@ def predict_file():
             ProgressStage.COMPLETE,
             "Cached results found, returning"
         )
+        end_check_cache = time.perf_counter()
+        timing_logger.info(f"Checking for cached results - {end_check_cache - start_check_cache:2f}")
+        end_total_time_post_to_return = time.perf_counter()
+        timing_logger.info(f"Total submit to return time - {end_total_time_post_to_return - start_total_time_post_to_return:2f}")
         with open(stats_path, "r") as f:
             stats_data = json.load(f)
         return jsonify({
             "fileUrl": f"/outputs/{output_filename}",
             "stats": stats_data
         })
+    end_check_cache = time.perf_counter()
+    timing_logger.info(f"Checking for cached results - {end_check_cache - start_check_cache:2f}")
 
     try:
         result = run_from_app(mode, input_path, file_hash)
@@ -123,6 +148,8 @@ def predict_file():
             with open(stats_path, "r") as f:
                 stats_data = json.load(f)
 
+        end_total_time_post_to_return = time.perf_counter()
+        timing_logger.info(f"Total submit to return time - {end_total_time_post_to_return - start_total_time_post_to_return:2f}")
         return jsonify({
         "fileUrl": f"/outputs/{output_filename}",
         "stats": stats_data
