@@ -10,7 +10,7 @@ import random
 import json
 from collections import defaultdict, Counter
 from .logo_groups import LOGO_GROUPS
-from backend.progress_manager import ProgressStage
+from app.progress_manager import ProgressStage
 
 sys.path.append('/Users/henrik/Documents/GitHub/SponsorSpotlight')
 
@@ -20,7 +20,7 @@ model = None
 
 def run_from_app(mode, input_path, file_hash):
     global progress, model_path
-    from backend.app import progress_instance
+    from app.app import progress_instance
     progress = progress_instance
 
     model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
@@ -60,7 +60,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Output directory setup
 BASE_DIR = os.path.dirname(os.path.dirname(script_dir))  
-OUTPUT_DIR = os.path.join(BASE_DIR, 'SponsorSpotlight', 'backend', 'outputs')
+OUTPUT_DIR = os.path.join(BASE_DIR, 'SponsorSpotlight', 'app', 'outputs')
 
 def loadModel():
     global model_path, model

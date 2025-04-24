@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const excelHeader = mediaType === "image" 
         ? ["Logo", "Detections"] 
-        : ["Logo", "Percentage", "Time (s)", "Frames", "Detections"];
+        : ["Logo", "Detections", "Percentage", "Time (s)", "Frames"];
 
         const dataForExcel = Object.keys(responseData.stats).map(logo => {
             const base = {

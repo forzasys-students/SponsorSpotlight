@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import sys
 import json
-from backend.progress_manager import ProgressManager, ProgressStage
+from app.progress_manager import ProgressManager, ProgressStage
 from flask_socketio import SocketIO
 from inference.inference import run_from_app
 
