@@ -12,8 +12,6 @@ from collections import defaultdict, Counter
 from .logo_groups import LOGO_GROUPS
 from app.progress_manager import ProgressStage
 
-sys.path.append('/Users/henrik/Documents/GitHub/SponsorSpotlight')
-
 progress = None
 model_path = ""
 model = None
