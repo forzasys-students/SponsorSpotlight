@@ -15,6 +15,7 @@ from app.progress_manager import ProgressStage
 progress = None
 model_path = ""
 model = None
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 def run_from_app(mode, input_path, file_hash):
     global progress, model_path
@@ -230,6 +231,7 @@ def process_video(video_path, file_hash):
         results = model(frame)
 
         logo_count = Counter()
+        seen_main_logos = set()
 
         for result in results:
             obb = result.obb
@@ -242,9 +244,13 @@ def process_video(video_path, file_hash):
         
         for logo, count in logo_count.items():
             if count > 0:
-                logo_stats[logo]["frames"] += 1
-                logo_stats[logo]["time"] += frame_time
+                main_logo = LOGO_GROUPS.get(logo, logo)
                 logo_stats[logo]["detections"] += count
+
+                if main_logo not in seen_main_logos:
+                    logo_stats[logo]["frames"] += 1
+                    logo_stats[logo]["time"] += frame_time
+                    seen_main_logos.add(main_logo)
 
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
@@ -272,12 +278,12 @@ def process_video(video_path, file_hash):
 
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
-        stats["time"] = round(stats["time"], 2)
-        percentage = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
-        if percentage > 100:
-            percentage = 100
-        stats["percentage"] = percentage
-
+        time = round(stats["time"], 2)
+        if time > total_video_time:
+            time = total_video_time
+        stats["time"] = time
+        stats["percentage"] = round((time / total_video_time * 100) if total_video_time > 0 else 0, 2)
+  
     stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
@@ -355,6 +361,8 @@ def process_video_stream(url, file_hash):
         results = model(frame)
 
         logo_count = Counter()
+        seen_main_logos = set()
+
         for result in results:
             obb = result.obb
             if obb is None:
@@ -366,9 +374,13 @@ def process_video_stream(url, file_hash):
         
         for logo, count in logo_count.items():
             if count > 0:
-                logo_stats[logo]["frames"] += 1
-                logo_stats[logo]["time"] += frame_time
+                main_logo = LOGO_GROUPS.get(logo, logo)
                 logo_stats[logo]["detections"] += count
+
+                if main_logo not in seen_main_logos:
+                    logo_stats[logo]["frames"] += 1
+                    logo_stats[logo]["time"] += frame_time
+                    seen_main_logos.add(main_logo)
 
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
@@ -391,11 +403,11 @@ def process_video_stream(url, file_hash):
 
     # Round time values to 2 decimal places, and calculating percentages
     for logo, stats in aggregated_stats.items():
-        stats["time"] = round(stats["time"], 2)
-        percentage = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
-        if percentage > 100:
-            percentage = 100
-        stats["percentage"] = percentage
+        time = round(stats["time"], 2)
+        if time > total_video_time:
+            time = total_video_time
+        stats["time"] = time
+        stats["percentage"] = round((time / total_video_time * 100) if total_video_time > 0 else 0, 2)
     
     stats_path = stats_file
     with open(stats_path, "w") as f:
