@@ -85,7 +85,7 @@ def predict_file():
         if file.filename == '':
             return jsonify({"error": "No file selected"}), 400
         if not allowed_file(file.filename):
-            return jsonify({"error": "Invalid file type"}), 400
+            return jsonify({"error": "Invalid file type. Valid file types are: jpg, jpeg, png, mp4, avi and mov"}), 400
         
         file_ext = os.path.splitext(file.filename)[-1].lower()
         mode = 'image' if file_ext in ['.jpg', '.jpeg', '.png'] else 'video'
