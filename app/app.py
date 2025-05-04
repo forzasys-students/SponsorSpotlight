@@ -13,6 +13,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 app = Flask(__name__)
 
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'mp4', 'avi', 'mov'}
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
 
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -31,6 +33,10 @@ def get_hashed_filename(input_path):
     else:
         with open(input_path, 'rb') as f:
             return hashlib.md5(f.read()).hexdigest()
+
+# Server-side input validation
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # SocketIO callback. Used for tracking progress during process
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -76,6 +82,11 @@ def predict_file():
         
     elif "file" in request.files:
         file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type"}), 400
+        
         file_ext = os.path.splitext(file.filename)[-1].lower()
         mode = 'image' if file_ext in ['.jpg', '.jpeg', '.png'] else 'video'
 

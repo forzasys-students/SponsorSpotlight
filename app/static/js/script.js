@@ -70,7 +70,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 throw new Error("Please choose a file or enter a URL.");
             }
 
-            if (!response.ok) throw new Error("Error handling request");
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Unknown error");
+            }
 
             responseData = await response.json();
             console.log("Response Data:", responseData);
