@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", function () {
     const form = document.getElementById("uploadForm");
     const errorMsg = document.getElementById("errorMsg");
+    const errorMsgFilter = document.getElementById("errorMsgFilter");
     const fileInput = document.querySelector("input[name='file']");
     const urlInput = document.getElementById("videoUrl");
     const videoPlayer = document.getElementById("videoPlayer");
@@ -15,6 +16,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const filterContainer = document.getElementById("filterContainer");
     const displayContainer = document.getElementById("displayContainer");
     const progressContainer = document.getElementById('progress-container');
+    const scroll_button = document.getElementById("scroll-button")
 
     const loadingMsg = document.createElement("p");
     loadingMsg.textContent = "Loading... Please Wait";
@@ -32,6 +34,7 @@ document.addEventListener("DOMContentLoaded", function () {
     form.addEventListener("submit", async function (event) {
         event.preventDefault();
         errorMsg.textContent = "";
+        errorMsgFilter.textContent = "";
         
         submitButton.disabled = true;
         submitButton.style.backgroundColor = "#ccc";
@@ -46,6 +49,7 @@ document.addEventListener("DOMContentLoaded", function () {
         displayContainer.style.display = "none";
         chartsContainer.style.display = "none";
         filterContainer.style.display = "none";
+        scroll_button.style.display = "none";
             
         let response;
         try {
@@ -146,12 +150,15 @@ document.addEventListener("DOMContentLoaded", function () {
         // Prepare data for Plotly
         const labels = Object.keys(stats);
         if (labels.length === 0) {
-            errorMsg.textContent = "No logos detected";
+            errorMsgFilter.textContent = "No logos selected/detected";
             return;
+        } else {
+            errorMsgFilter.textContent = "";
         }
 
         chartsContainer.style.display = "block";
         filterContainer.style.display = "block";
+        scroll_button.style.display = "block";
 
         if (mediaType === "image") {
 
@@ -378,6 +385,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         XLSX.writeFile(workbook, "SponsorSpotlight.xlsx", { compression: true });
     });
+
+    //Function for scrolling down to chart on button-click
+    scroll_button.addEventListener("click", function () {
+        filterContainer.scrollIntoView({ behavior: 'smooth' });    
+    });  
 
     //Function for filtering logos in chart.
     document.getElementById("filterButton").addEventListener("click", function () {

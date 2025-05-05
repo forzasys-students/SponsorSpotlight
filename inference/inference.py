@@ -336,6 +336,7 @@ def process_video_stream(url, file_hash):
 
     cap = cv2.VideoCapture(url)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    update_interval = max(int(total_frames * 10 / 100), 1) # Updating every 10% of frame progress made
     cap.release()    
 
     logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
@@ -385,9 +386,15 @@ def process_video_stream(url, file_hash):
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
 
-        if frame_count % (total_frames // 100) == 0:
+        if frame_count % update_interval == 0:
             progress_percentage = (frame_count / total_frames) * 100
-            progress.update_progress(ProgressStage.INFERENCE_PROGRESS, f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)")
+            progress.update_progress(
+                ProgressStage.INFERENCE_PROGRESS, 
+                f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
+                frame = frame_count,
+                total_frames = total_frames,
+                progress_percentage = progress_percentage
+            )
 
     pipe.stdout.close()
     pipe.wait()

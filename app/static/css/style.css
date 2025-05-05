@@ -12,7 +12,12 @@ h1 {
     margin-bottom: 20px;
 }
 
-#errorMsg {
+h3 {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#errorMsg, #errorMsgFilter {
     font-weight: bold;
 }
 
@@ -45,6 +50,10 @@ h1 {
 
 #filterButton, #resetButton {
     min-width: 100px; 
+}
+
+#scroll-button {
+    max-width: 170px;
 }
 
 #filterControlsContainer {
