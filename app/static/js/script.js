@@ -150,10 +150,10 @@ document.addEventListener("DOMContentLoaded", function () {
         // Prepare data for Plotly
         const labels = Object.keys(stats);
         if (labels.length === 0) {
-            errorMsgFilter.textContent = "No logos selected/detected";
+            errorMsg.textContent = "No logos detected";
             return;
         } else {
-            errorMsgFilter.textContent = "";
+            errorMsg.textContent = "";
         }
 
         chartsContainer.style.display = "block";
@@ -401,8 +401,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 acc[logo] = responseData.stats[logo];
                 return acc;
             }, {});
-
-        updateUIWithData(filteredData);
+        
+        if (filteredData > 0) {
+            errorMsgFilter.textContent = "";
+            updateUIWithData(filteredData);
+        } else {
+            errorMsgFilter.textContent = "No logos selected";
+        }
     });
 
     document.getElementById("resetButton").addEventListener("click", function () {
