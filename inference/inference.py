@@ -15,47 +15,51 @@ from app.progress_manager import ProgressStage
 progress = None
 model_path = ""
 model = None
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-def run_from_app(mode, input_path, file_hash):
-    global progress, model_path
-    from app.app import progress_instance
-    progress = progress_instance
-
-    model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
-
-    try:
-        loadModel()
-
-        # Updating progress
-        progress.update_progress(
-            ProgressStage.MODEL_READY,
-            "Loading model"
-        )
-    except Exception as e:
-        progress.update_progress(
-            ProgressStage.ERROR,
-            f"Failed to load model: {str(e)}"
-        )
-
-    # Start progress update
-    progress.update_progress(ProgressStage.INFERENCE_START, "Starting processing")
-
-    if mode == 'image':
-        process_image(input_path, file_hash)
-    elif mode == 'video':
-        if is_url(input_path):
-            process_video_stream(input_path, file_hash)
-        else:
-            process_video(input_path, file_hash)
-    else:
-        print('Invalid mode. Use "image" or "video".')
-        progress.update_progress(ProgressStage.ERROR, "Invalid mode")
-        return
-
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
+
+def run_from_app(mode, input_path, file_hash):
+    try:
+        global progress, model_path
+        from app.app import progress_instance
+        progress = progress_instance
+
+        model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
+
+        try:
+            loadModel()
+
+            # Updating progress
+            progress.update_progress(
+                ProgressStage.MODEL_READY,
+                "Loading model"
+            )
+        except Exception as e:
+            progress.update_progress(
+                ProgressStage.ERROR,
+                f"Failed to load model: {str(e)}"
+            )
+            return
+
+        # Start progress update
+        progress.update_progress(ProgressStage.INFERENCE_START, "Starting processing")
+
+        if mode == 'image':
+            process_image(input_path, file_hash)
+        elif mode == 'video':
+            if is_url(input_path):
+                process_video_stream(input_path, file_hash)
+            else:
+                process_video(input_path, file_hash)
+        else:
+            print('Invalid mode. Use "image" or "video".')
+            progress.update_progress(ProgressStage.ERROR, "Invalid mode")
+            return
+    except Exception as e:
+        progress.update_progress(ProgressStage.ERROR, f"Inference failed: {str(e)}")
+        print(f"Inference failed: {str(e)}", file=sys.stderr)
+        return
 
 # Output directory setup
 BASE_DIR = os.path.dirname(os.path.dirname(script_dir))  
