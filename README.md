@@ -1,6 +1,6 @@
 # SponsorSpotlight
 
-Dette prosjektet er en webapplikasjon som analyserer sponsorlogoer i videoinnhold ved hjelp av AI-modellen YOLOv11.
+Dette prosjektet er en webapplikasjon som analyserer sponsorlogoer i videoinnhold ved hjelp av AI-modellen YOLOv11. Applikasjonen lar brukeren laste opp lokale videofiler eller lime inn M3U8-strømmer, og gir en visuell oversikt over logoeksponering gjennom grafer, statistikk og mulighet for eksport til Excel. Formålet er å gi innsikt i hvor ofte ulike sponsorer eksponeres i sportsvideoer eller annen type videoinnhold.
 
 ## 📥 Kloning av prosjektet
 
