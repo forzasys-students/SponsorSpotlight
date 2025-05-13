@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 return acc;
             }, {});
         
-        if (filteredData > 0) {
+        if (Object.keys(filteredData).length > 0) {
             errorMsgFilter.textContent = "";
             updateUIWithData(filteredData);
         } else {
