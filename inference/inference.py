@@ -307,7 +307,7 @@ def is_url(path):
 def process_video_stream(url, file_hash):
     global progress
 
-    #Generating unique file names
+    # Generating unique file names
     output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
     stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
 
@@ -316,12 +316,16 @@ def process_video_stream(url, file_hash):
         'ffprobe', '-v', 'error', '-show_entries',
         'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', url
     ]
+    # Due to frame loss, the expected amount of frames will not be correct, but the graphs and statistics will be
     try:
         duration = float(subprocess.check_output(ffprobe_cmd).decode('utf-8').strip())
         total_video_time = round(duration, 2)
+        fps = 30.0
+        estimated_total_frames = int(duration * fps)
     except (subprocess.CalledProcessError, ValueError):
         print("Warning: Could not determine video duration, using fallback calculation")
         total_video_time = 0
+        estimated_total_frames = None
 
     # Use ffmpeg to get the best quality stream
     ffmpeg_command = [
@@ -336,17 +340,13 @@ def process_video_stream(url, file_hash):
     frame_time = 1 / fps
     frame_count = 0
 
-    cap = cv2.VideoCapture(url)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()    
-
     logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
 
     progress.update_progress(
         ProgressStage.INFERENCE_PROGRESS,
         "Inference running",
         frame=frame_count,
-        total_frames=total_frames,
+        total_frames=estimated_total_frames,
         progress_percentage=0
     ) 
 
@@ -377,28 +377,30 @@ def process_video_stream(url, file_hash):
         for logo, count in logo_count.items():
             if count > 0:
                 main_logo = LOGO_GROUPS.get(logo, logo)
-                logo_stats[logo]["detections"] += count
+                logo_stats[main_logo]["detections"] += count
 
                 if main_logo not in seen_main_logos:
-                    logo_stats[logo]["frames"] += 1
-                    logo_stats[logo]["time"] += frame_time
+                    logo_stats[main_logo]["frames"] += 1
+                    logo_stats[main_logo]["time"] += frame_time
                     seen_main_logos.add(main_logo)
 
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
 
-        progress_percentage = (frame_count / total_frames) * 100
+        progress_percentage = (frame_count * frame_time / total_video_time) * 100 if total_video_time > 0 else 0
         progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS, 
-            f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
-            frame = frame_count,
-            total_frames = total_frames,
-            progress_percentage = progress_percentage
-            )
+            f"Processing frame {frame_count} (~{round(progress_percentage)}%)",
+            frame=frame_count,
+            total_frames=estimated_total_frames,
+            progress_percentage=progress_percentage
+        )
 
     pipe.stdout.close()
     pipe.wait()
     out.release()
+
+    total_frames = frame_count  # Actual number of frames processed
 
     # Updating progress
     progress.update_progress(
@@ -414,8 +416,8 @@ def process_video_stream(url, file_hash):
         if time > total_video_time:
             time = total_video_time
         stats["time"] = time
-        stats["percentage"] = round((time / total_video_time * 100) if total_video_time > 0 else 0, 2)
-    
+        stats["percentage"] = round((stats["frames"] / total_frames * 100) if total_frames > 0 else 0, 2)
+
     stats_path = stats_file
     with open(stats_path, "w") as f:
         json.dump(aggregated_stats, f, indent=4)
@@ -427,6 +429,8 @@ def process_video_stream(url, file_hash):
     )
 
     return aggregated_stats
+
+
 
 # Function to aggregate different versions of logos using the logo_groups.py script
 def aggregate_stats(logo_stats):
