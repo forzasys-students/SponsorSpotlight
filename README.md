@@ -1,20 +1,20 @@
+
 # SponsorSpotlight
 
-Dette prosjektet er en webapplikasjon som analyserer sponsorlogoer i videoinnhold ved hjelp av AI-modellen YOLOv11. Applikasjonen lar brukeren laste opp lokale videofiler eller lime inn M3U8-strømmer, og gir en visuell oversikt over logoeksponering gjennom grafer, statistikk og mulighet for eksport til Excel. Formålet er å gi innsikt i hvor ofte ulike sponsorer eksponeres i sportsvideoer eller annen type videoinnhold.
+Dette prosjektet er en webapplikasjon som analyserer sponsorlogoer i videoinnhold ved hjelp av AI-modellen YOLOv11. Applikasjonen støtter både lokal videoopplasting og sanntidsanalyse av videostrømmer via M3U8-lenker.
 
-## 📥 Kloning av prosjektet
+## 📦 Kloning av prosjektet
 
-Du kan laste ned prosjektet ved å bruke en av følgende metoder:
+Du kan klone prosjektet med én av følgende metoder:
 
-### 🔹 Metode 1: GitHub Desktop (anbefalt)
+### Metode 1: GitHub Desktop (anbefalt)
 
-1. Gå til GitHub-repositoriet:  
-   https://github.com/forzasys-students/SponsorSpotlight
-2. Trykk på den grønne **Code**-knappen og velg **"Open with GitHub Desktop"**.
-3. Velg ønsket mappe lokalt og trykk **Clone**.
-4. Når prosjektet er klonet, trykk på **"Open in Visual Studio Code"** for å åpne prosjektet.
+1. Gå til GitHub-repositoriet: [https://github.com/forzasys-students/SponsorSpotlight](https://github.com/forzasys-students/SponsorSpotlight)
+2. Trykk på den grønne `Code`-knappen og velg **Open with GitHub Desktop**.
+3. Velg ønsket lokal mappe og trykk **Clone**.
+4. Åpne prosjektet i VS Code med **Open in Visual Studio Code**.
 
-### 🔹 Metode 2: Kommandolinje
+### Metode 2: Kommandolinje
 
 ```bash
 git clone https://github.com/forzasys-students/SponsorSpotlight.git
@@ -30,29 +30,38 @@ Applikasjonen avhenger av flere Python-biblioteker. Disse kan installeres slik:
 2. Sjekk at python og pip er installert:
 
 ```bash
-python --version
+python --version 
 pip --version
 ```
 
-Dersom du ikke har Python installert, last det ned fra: https://www.python.org/
+✅ Hvis disse kommandoene ikke fungerer, kan du også prøve:
 
-3. Naviger til `app`-mappen:
+```bash
+python3 --version
+pip3 --version
+```
+
+3. Naviger inn i `app`-mappen:
 
 ```bash
 cd app
 ```
 
-4. Installer alle avhengigheter:
+4. Installer alle nødvendige avhengigheter:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 🚀 Kjøring av applikasjonen
+eller (om du bruker python3/pip3):
 
-Etter at avhengighetene er installert:
+```bash
+pip3 install -r requirements.txt
+```
 
-1. Gå tilbake til rotmappen:
+## 🚀 Kjøring av programmet
+
+1. Gå tilbake til rotmappen hvis du står i `app`-mappen:
 
 ```bash
 cd ..
@@ -64,31 +73,43 @@ cd ..
 python -m app.app
 ```
 
-3. Følg lenken i terminalen (f.eks. `http://127.0.0.1:5000`) for å åpne applikasjonen i nettleseren.
+Eller (hvis du bruker python3):
 
-## 💡 Bruk av applikasjonen
+```bash
+python3 -m app.app
+```
 
-Når applikasjonen er startet i nettleseren, får du opp et enkelt webgrensesnitt.
+Etter oppstart vil det vises en lokal nettadresse (som f.eks. `http://127.0.0.1:5000`). Hold inne `Ctrl` og klikk på lenken, eller lim den inn i nettleseren din.
 
-Her kan du:
-- 📁 Laste opp en videofil fra maskinen
-- 🌐 Lime inn en M3U8-lenke til en videostrøm
+## 🖥️ Bruk av applikasjonen
 
-Trykk deretter på **Submit**. Applikasjonen vil:
-- Ekstrahere bilder fra videoen
-- Bruke en trenet AI-modell (YOLOv11) for å gjenkjenne sponsorlogoer
-- Vise fremgang i sanntid
+Etter at nettsiden er åpnet, kan du:
 
-## 📊 Resultatvisning og eksport
+- **Laste opp lokal videofil** – Klikk på *Choose File* og velg en fil.
+- **Lim inn M3U8-lenke** – Bruk en lenke til en videostrøm på nett.
 
-Etter at videoen er analysert:
-- En videospiller vises
-- Du kan filtrere på spesifikke sponsorer
-- Trykk på **Scroll to diagram** for å hoppe til visualiseringen
+Etter å ha valgt videokilde og trykket på **Submit**, starter applikasjonen en AI-basert analyse (YOLOv11). Logoeksponering identifiseres bilde for bilde.
 
-Diagrammet viser:
-- Prosentvis eksponering
-- Antall rammer logoen ble sett i
-- Tid (i sekunder)
+## 📊 Resultat og eksport
 
-Du kan også laste ned statistikken som Excel-fil med knappen **Export to Excel**.
+Etter analyse vises resultater i tre trinn:
+
+1. **Videovisning** med annoterte rammer.
+2. **Filtreringsmeny** for valg av sponsorer.
+3. **Scroll to Diagram** sender deg ned til et interaktivt diagram.
+
+Diagrammet viser hvor ofte og hvor lenge hver logo har vært synlig. Du kan eksportere resultatene som en Excel-fil med **Export to Excel**.
+
+## 🛠️ Teknologier brukt
+
+- Python 3.x
+- Flask
+- YOLOv11 (Ultralytics)
+- OpenCV
+- NumPy
+- FFmpeg (for M3U8-strømmer)
+- HTML, CSS, JavaScript (frontend)
+
+---
+
+🧪 *SponsorSpotlight er utviklet som en del av en bacheloroppgave i Anvendt Datateknologi ved OsloMet, 2025.*
