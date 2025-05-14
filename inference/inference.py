@@ -25,6 +25,15 @@ def run_from_app(mode, input_path, file_hash):
         from app.app import progress_instance
         progress = progress_instance
 
+        # Reset progress to avoid leftover state from previous run
+        progress.update_progress(
+            ProgressStage.INFERENCE_START,
+            "Preparing for new inference",
+            frame=None,
+            total_frames=None,
+            progress_percentage=0
+        )
+
         model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
 
         try:

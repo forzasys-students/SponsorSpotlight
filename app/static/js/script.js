@@ -42,6 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
         loadingMsg.style.display = "block";
         loadingCircle.style.display = "block";
         progressContainer.style.display = 'block';
+        document.getElementById("stage5").textContent = "";
 
         //Reset UI
         imageView.removeAttribute("src");
