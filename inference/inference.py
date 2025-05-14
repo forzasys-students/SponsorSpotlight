@@ -1,16 +1,84 @@
+import hashlib
 import cv2
 import torch
 from ultralytics import YOLO
 import os
+import sys
 import subprocess
 import numpy as np
 import random
+import json
+from collections import defaultdict, Counter
+from .logo_groups import LOGO_GROUPS
+from app.progress_manager import ProgressStage
+
+progress = None
+model_path = ""
+model = None
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Load the model
-model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
+def run_from_app(mode, input_path, file_hash):
+    try:
+        global progress, model_path
+        from app.app import progress_instance
+        progress = progress_instance
+
+        # Reset progress to avoid leftover state from previous run
+        progress.update_progress(
+            ProgressStage.INFERENCE_START,
+            "Preparing for new inference",
+            frame=None,
+            total_frames=None,
+            progress_percentage=0
+        )
+
+        model_path = os.path.join(script_dir, '../train-result/yolov11-m-finetuned/weights/best.pt')
+
+        try:
+            loadModel()
+
+            # Updating progress
+            progress.update_progress(
+                ProgressStage.MODEL_READY,
+                "Loading model"
+            )
+        except Exception as e:
+            progress.update_progress(
+                ProgressStage.ERROR,
+                f"Failed to load model: {str(e)}"
+            )
+            return
+
+        # Start progress update
+        progress.update_progress(ProgressStage.INFERENCE_START, "Starting processing")
+
+        if mode == 'image':
+            process_image(input_path, file_hash)
+        elif mode == 'video':
+            if is_url(input_path):
+                process_video_stream(input_path, file_hash)
+            else:
+                process_video(input_path, file_hash)
+        else:
+            print('Invalid mode. Use "image" or "video".')
+            progress.update_progress(ProgressStage.ERROR, "Invalid mode")
+            return
+    except Exception as e:
+        progress.update_progress(ProgressStage.ERROR, f"Inference failed: {str(e)}")
+        print(f"Inference failed: {str(e)}", file=sys.stderr)
+        return
+
+# Output directory setup
+BASE_DIR = os.path.dirname(os.path.dirname(script_dir))  
+OUTPUT_DIR = os.path.join(BASE_DIR, 'SponsorSpotlight', 'app', 'outputs')
+
+def loadModel():
+    global model_path, model
+    # Load the model on the best available device
+    device = get_device()
+    model = YOLO(model_path).to(device)
 
 # Determine the best available device
 def get_device():
@@ -20,10 +88,6 @@ def get_device():
         return 'mps'
     else:
         return 'cpu'
-
-# Load the model on the best available device
-device = get_device()
-model = YOLO(model_path).to(device)
 
 # Load class names
 classes_path = os.path.join(script_dir, 'classes.txt')
@@ -82,80 +146,311 @@ def annotate_frame(frame, results):
     return frame
 
 # Function to process image
-def process_image(image_path):
+def process_image(image_path, file_hash):
+    global progress
+
+    #Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.jpg')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+
     image = cv2.imread(image_path)
     results = model(image)
+
+    logo_count = Counter()
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=1,
+        total_frames=1,
+        progress_percentage=100
+    )
+
+    for result in results:
+        obb = result.obb
+        if obb is None:
+            continue
+        for i in range(len(obb.conf)):
+            cls = int(obb.cls[i])
+            class_name = class_names[cls]
+            logo_count[class_name] += 1
+    
     annotated_image = annotate_frame(image, results)
-    output_path = 'output.jpg'
     cv2.imwrite(output_path, annotated_image)
 
-# Function to process video
-def process_video(video_path):
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
+
+    aggregated_stats = defaultdict(lambda: {"detections": 0})
+
+    for logo, count in logo_count.items():
+        if count > 0:
+            main_logo = LOGO_GROUPS.get(logo, logo)
+            aggregated_stats[main_logo]["detections"] += count
+    
+    aggregated_stats = dict(aggregated_stats)
+
+    stats_path = stats_file
+    with open(stats_path, "w") as f:
+        json.dump(aggregated_stats, f, indent=4)
+    
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
+        
+    return aggregated_stats
+
+# Function to process video and track statistics
+def process_video(video_path, file_hash):
+    global progress
+
+    #Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+            
     cap = cv2.VideoCapture(video_path)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('output.mp4', fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    out = cv2.VideoWriter(output_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (int(cap.get(3)), int(cap.get(4))))
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_time = 1 / fps
+    frame_count = 0
+    total_video_time = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=frame_count,
+        total_frames=total_frames,
+        progress_percentage=0
+    ) 
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
+    
+        frame_count += 1
         results = model(frame)
+
+        logo_count = Counter()
+        seen_main_logos = set()
+
+        for result in results:
+            obb = result.obb
+            if obb is None:
+                continue
+            for i in range(len(obb.conf)):
+                cls = int(obb.cls[i])
+                class_name = class_names[cls]
+                logo_count[class_name] += 1
+        
+        for logo, count in logo_count.items():
+            if count > 0:
+                main_logo = LOGO_GROUPS.get(logo, logo)
+                logo_stats[logo]["detections"] += count
+
+                if main_logo not in seen_main_logos:
+                    logo_stats[logo]["frames"] += 1
+                    logo_stats[logo]["time"] += frame_time
+                    seen_main_logos.add(main_logo)
+
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
+
+        progress_percentage = (frame_count / total_frames) * 100
+        progress.update_progress(
+            ProgressStage.INFERENCE_PROGRESS, 
+            f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
+            frame = frame_count,
+            total_frames = total_frames,
+            progress_percentage = progress_percentage
+            )
+
     cap.release()
     out.release()
 
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
+
+    aggregated_stats = aggregate_stats(logo_stats)
+
+    # Round time values to 2 decimal places, and calculating percentages
+    for logo, stats in aggregated_stats.items():
+        time = round(stats["time"], 2)
+        if time > total_video_time:
+            time = total_video_time
+        stats["time"] = time
+        stats["percentage"] = round((time / total_video_time * 100) if total_video_time > 0 else 0, 2)
+  
+    stats_path = stats_file
+    with open(stats_path, "w") as f:
+        json.dump(aggregated_stats, f, indent=4)
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
+
+    return aggregated_stats
+    
 # Function to check if a path is a URL
 def is_url(path):
     return path.startswith('http://') or path.startswith('https://')
 
 # Function to process video stream from URL
 # Use ffmpeg to select the highest quality stream
-def process_video_stream(url):
+def process_video_stream(url, file_hash):
+    global progress
+
+    # Generating unique file names
+    output_path = os.path.join(OUTPUT_DIR, f'output_{file_hash}.mp4')
+    stats_file = os.path.join(OUTPUT_DIR, f'logo_stats_{file_hash}.json')
+
+    # Using ffprobe to get video duration
+    ffprobe_cmd = [
+        'ffprobe', '-v', 'error', '-show_entries',
+        'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', url
+    ]
+    # Due to frame loss, the expected amount of frames will not be correct, but the graphs and statistics will be
+    try:
+        duration = float(subprocess.check_output(ffprobe_cmd).decode('utf-8').strip())
+        total_video_time = round(duration, 2)
+        fps = 30.0
+        estimated_total_frames = int(duration * fps)
+    except (subprocess.CalledProcessError, ValueError):
+        print("Warning: Could not determine video duration, using fallback calculation")
+        total_video_time = 0
+        estimated_total_frames = None
+
     # Use ffmpeg to get the best quality stream
     ffmpeg_command = [
         'ffmpeg', '-i', url, '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
     ]
     pipe = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, bufsize=10**8)
     width, height = 1280, 720  # Set the expected width and height of the video
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('output.mp4', fourcc, 30.0, (width, height))
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    out = cv2.VideoWriter(output_path, fourcc, 30.0, (width, height))
+
+    fps = 30.0
+    frame_time = 1 / fps
+    frame_count = 0
+
+    logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+
+    progress.update_progress(
+        ProgressStage.INFERENCE_PROGRESS,
+        "Inference running",
+        frame=frame_count,
+        total_frames=estimated_total_frames,
+        progress_percentage=0
+    ) 
 
     while True:
         raw_image = pipe.stdout.read(width * height * 3)
         if not raw_image:
             break
         frame = np.frombuffer(raw_image, dtype='uint8').reshape((height, width, 3))
-        print('Processing frame...')  # Debug: Check frame processing
+        frame_count += 1
+
+        if total_video_time == 0:
+            total_video_time = frame_count * frame_time
+        
         results = model(frame)
-        if results is None or not results:
-            print('No detections in this frame.')
-        else:
-            print(f'Detections: {len(results)}')  # Debug: Check number of detections
+
+        logo_count = Counter()
+        seen_main_logos = set()
+
+        for result in results:
+            obb = result.obb
+            if obb is None:
+                continue
+            for i in range(len(obb.conf)):
+                cls = int(obb.cls[i])
+                class_name = class_names[cls]
+                logo_count[class_name] += 1
+        
+        for logo, count in logo_count.items():
+            if count > 0:
+                main_logo = LOGO_GROUPS.get(logo, logo)
+                logo_stats[main_logo]["detections"] += count
+
+                if main_logo not in seen_main_logos:
+                    logo_stats[main_logo]["frames"] += 1
+                    logo_stats[main_logo]["time"] += frame_time
+                    seen_main_logos.add(main_logo)
+
         annotated_frame = annotate_frame(frame, results)
         out.write(annotated_frame)
+
+        progress_percentage = (frame_count * frame_time / total_video_time) * 100 if total_video_time > 0 else 0
+        progress.update_progress(
+            ProgressStage.INFERENCE_PROGRESS, 
+            f"Processing frame {frame_count} (~{round(progress_percentage)}%)",
+            frame=frame_count,
+            total_frames=estimated_total_frames,
+            progress_percentage=progress_percentage
+        )
 
     pipe.stdout.close()
     pipe.wait()
     out.release()
-    print('Annotated video saved to output.mp4')
 
-# Main function
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 3:
-        print('Usage: python inference.py <image|video> <path>')
-        sys.exit(1)
+    total_frames = frame_count  # Actual number of frames processed
 
-    mode = sys.argv[1]
-    path = sys.argv[2]
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.POST_PROCESSING,
+        "Aggregating stats"
+    )
 
-    if mode == 'image':
-        process_image(path)
-    elif mode == 'video':
-        if is_url(path):
-            process_video_stream(path)
-        else:
-            process_video(path)
-    else:
-        print('Invalid mode. Use "image" or "video".')
-        sys.exit(1)
+    aggregated_stats = aggregate_stats(logo_stats)
+
+    # Round time values to 2 decimal places, and calculating percentages
+    for logo, stats in aggregated_stats.items():
+        time = round(stats["time"], 2)
+        if time > total_video_time:
+            time = total_video_time
+        stats["time"] = time
+        stats["percentage"] = round((stats["frames"] / total_frames * 100) if total_frames > 0 else 0, 2)
+
+    stats_path = stats_file
+    with open(stats_path, "w") as f:
+        json.dump(aggregated_stats, f, indent=4)
+
+    # Updating progress
+    progress.update_progress(
+        ProgressStage.COMPLETE,
+        "Inference finished, returning"
+    )
+
+    return aggregated_stats
+
+
+
+# Function to aggregate different versions of logos using the logo_groups.py script
+def aggregate_stats(logo_stats):
+    aggregated = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
+    
+    for logo, stats in logo_stats.items():
+        # Get the main logo name or use the original if not in mapping
+        main_logo = LOGO_GROUPS.get(logo, logo)
+        
+        aggregated[main_logo]["frames"] += stats["frames"]
+        aggregated[main_logo]["time"] += stats["time"]
+        aggregated[main_logo]["detections"] += stats["detections"]
+    
+    return aggregated

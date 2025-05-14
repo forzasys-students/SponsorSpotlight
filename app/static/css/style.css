@@ -1,0 +1,125 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 0;
+}
+
+h1 {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+h3 {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#errorMsg, #errorMsgFilter {
+    font-weight: bold;
+}
+
+#loadingCircle {
+    display: none;
+    width: 50px;
+    height: 50px;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#videoChart, #imageChart {
+    width: 100%; 
+    margin-bottom: 150px; 
+}
+
+#categoryDropdown {
+    height: 150px;
+    min-width: 200px;
+    width: auto;
+}
+
+#filterButton, #resetButton {
+    min-width: 100px; 
+}
+
+#scroll-button {
+    max-width: 170px;
+}
+
+#filterControlsContainer {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #fff;
+    border-radius: 0.25rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+}
+
+#displayContainer .col-md-8 {
+    float: none;
+    margin: 0 auto;
+}
+
+/* Progress bar */
+#progress-container {
+    display: none;
+    position: relative;
+    width: 100%; 
+    height: 50px; 
+    background-color: transparent;
+    margin: 20px 0;
+}
+
+.custom-progress-bar {
+    display: flex;
+    width: 100%; 
+    height: 30px;
+    background-color: #b6b2b2;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-segment {
+    flex: 1;
+    border-right: 1px solid white;
+    transition: background-color 0.3s;
+}
+
+.active {
+    background-color: #ecf818; 
+}
+
+.completed {
+    background-color: #4CAF50; 
+}
+
+.error {
+    background-color: red;
+}
+
+.stage-labels {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    width: 100%;
+    margin-top: 5px;
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+}
+
+#stage5 {
+    font-size: 12px; 
+} 
+
+
+
