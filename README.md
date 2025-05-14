@@ -3,7 +3,7 @@
 
 Dette prosjektet er en webapplikasjon som analyserer sponsorlogoer i videoinnhold ved hjelp av AI-modellen YOLOv11. Applikasjonen støtter både lokal videoopplasting og sanntidsanalyse av videostrømmer via M3U8-lenker.
 
-![Eksempel Deteksjon](example-detection1.gif)
+![Eksempel Deteksjon](example-detection.gif)
 
 ## 📦 Kloning av prosjektet
 
