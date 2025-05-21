@@ -112,13 +112,13 @@ h3 {
     grid-template-columns: repeat(7, 1fr);
     width: 100%;
     margin-top: 5px;
-    font-size: 12px;
+    font-size: 20px;
     color: #666;
     text-align: center;
 }
 
 #stage5 {
-    font-size: 12px; 
+    font-size: 16px; 
 } 
 
 
