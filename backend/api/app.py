@@ -4,6 +4,7 @@ import uuid
 from werkzeug.utils import secure_filename
 import hashlib
 import time
+import json
 
 from backend.core.inference_manager import InferenceManager
 from backend.utils.progress_manager import ProgressManager
@@ -182,6 +183,44 @@ def get_stats(file_hash):
         stats = f.read()
     
     return stats, 200, {'Content-Type': 'application/json'}
+
+@app.route('/api/timeline_stats/<file_hash>')
+def get_timeline_stats(file_hash):
+    """API endpoint to get the frame-by-frame timeline statistics"""
+    timeline_stats_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'timeline_stats.json')
+    
+    if not os.path.exists(timeline_stats_path):
+        return jsonify({'error': 'Timeline statistics not found'}), 404
+        
+    with open(timeline_stats_path, 'r') as f:
+        timeline_stats = f.read()
+        
+    return timeline_stats, 200, {'Content-Type': 'application/json'}
+
+@app.route('/api/agent_query/<file_hash>', methods=['POST'])
+def agent_query(file_hash):
+    """API endpoint to handle agentic queries"""
+    data = request.get_json()
+    query = data.get('query')
+    
+    if not query:
+        return jsonify({'error': 'No query provided'}), 400
+    
+    # Construct the path to the stats file
+    stats_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'stats.json')
+    if not os.path.exists(stats_path):
+        return jsonify({'error': 'Statistics not found for this file'}), 404
+        
+    # Load the stats data
+    with open(stats_path, 'r') as f:
+        stats_data = json.load(f)
+        
+    # Route the query using the agent router
+    from backend.agent.router import AgentRouter
+    router = AgentRouter()
+    result = router.route_query(query, stats_data)
+    
+    return jsonify({'response': result})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5005)

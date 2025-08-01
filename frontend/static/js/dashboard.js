@@ -2,17 +2,19 @@ class Dashboard {
     constructor(fileHash, fileType) {
         this.fileHash = fileHash;
         this.fileType = fileType;
-        this.data = {};
+        this.logoStats = {};
+        this.videoMetadata = {};
         this.charts = {};
     }
 
     async init() {
         try {
             await this.loadData();
-            this.initializeOverview();
-            this.initializeDetailed();
-            this.initializeInsights();
-            this.setupEventListeners();
+                    this.initializeOverview();
+        this.initializeDetailed();
+        this.initializeInsights();
+        this.setupEventListeners();
+        this.setupAgentInterface();
         } catch (error) {
             console.error('Failed to initialize dashboard:', error);
             this.showError('Failed to load dashboard data');
@@ -24,7 +26,9 @@ class Dashboard {
         if (!response.ok) {
             throw new Error('Failed to fetch data');
         }
-        this.data = await response.json();
+        const data = await response.json();
+        this.logoStats = data.logo_stats || {};
+        this.videoMetadata = data.video_metadata || {};
     }
 
     initializeOverview() {
@@ -34,22 +38,18 @@ class Dashboard {
     }
 
     updateKeyMetrics() {
-        const logos = Object.keys(this.data);
-        const totalDetections = logos.reduce((sum, logo) => sum + this.data[logo].detections, 0);
+        const logos = Object.keys(this.logoStats);
+        const totalDetections = logos.reduce((sum, logo) => sum + this.logoStats[logo].detections, 0);
         const uniqueLogos = logos.length;
         
         let totalExposure = 0;
         let topLogo = '-';
         
         if (this.fileType === 'video') {
-            totalExposure = logos.reduce((sum, logo) => sum + (this.data[logo].time || 0), 0);
-            topLogo = logos.reduce((a, b) => 
-                (this.data[a].percentage || 0) > (this.data[b].percentage || 0) ? a : b, logos[0] || '-'
-            );
+            totalExposure = logos.reduce((sum, logo) => sum + (this.logoStats[logo].time || 0), 0);
+            topLogo = logos.sort((a, b) => (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0))[0] || '-';
         } else {
-            topLogo = logos.reduce((a, b) => 
-                this.data[a].detections > this.data[b].detections ? a : b, logos[0] || '-'
-            );
+            topLogo = logos.sort((a, b) => this.logoStats[b].detections - this.logoStats[a].detections)[0] || '-';
         }
 
         document.getElementById('total-detections').textContent = totalDetections.toLocaleString();
@@ -62,19 +62,19 @@ class Dashboard {
 
     renderTopPerformers() {
         const container = document.getElementById('top-performers-list');
-        const logos = Object.keys(this.data)
+        const logos = Object.keys(this.logoStats)
             .sort((a, b) => {
                 if (this.fileType === 'video') {
-                    return (this.data[b].percentage || 0) - (this.data[a].percentage || 0);
+                    return (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0);
                 }
-                return this.data[b].detections - this.data[a].detections;
+                return this.logoStats[b].detections - this.logoStats[a].detections;
             })
             .slice(0, 5);
 
         container.innerHTML = logos.map((logo, index) => {
             const value = this.fileType === 'video' ? 
-                `${(this.data[logo].percentage || 0).toFixed(1)}%` : 
-                `${this.data[logo].detections} detections`;
+                `${(this.logoStats[logo].percentage || 0).toFixed(1)}%` : 
+                `${this.logoStats[logo].detections} detections`;
             
             return `
                 <div class="top-performer rank-${index + 1}">
@@ -88,19 +88,19 @@ class Dashboard {
 
     renderExposureChart() {
         const ctx = document.getElementById('exposureChart').getContext('2d');
-        const logos = Object.keys(this.data)
+        const logos = Object.keys(this.logoStats)
             .sort((a, b) => {
                 if (this.fileType === 'video') {
-                    return (this.data[b].percentage || 0) - (this.data[a].percentage || 0);
+                    return (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0);
                 }
-                return this.data[b].detections - this.data[a].detections;
+                return this.logoStats[b].detections - this.logoStats[a].detections;
             })
             .slice(0, 10);
 
         const data = logos.map(logo => 
             this.fileType === 'video' ? 
-            (this.data[logo].percentage || 0) : 
-            this.data[logo].detections
+            (this.logoStats[logo].percentage || 0) : 
+            this.logoStats[logo].detections
         );
 
         const colors = [
@@ -154,10 +154,10 @@ class Dashboard {
 
     renderDetailedTable() {
         const tbody = document.getElementById('detailedTableBody');
-        const logos = Object.keys(this.data);
+        const logos = Object.keys(this.logoStats);
 
         tbody.innerHTML = logos.map(logo => {
-            const logoData = this.data[logo];
+            const logoData = this.logoStats[logo];
             const performance = this.calculatePerformance(logoData);
             
             let row = `
@@ -221,7 +221,7 @@ class Dashboard {
 
         const filterAndSort = () => {
             const searchTerm = searchInput.value.toLowerCase();
-            let filteredLogos = Object.keys(this.data)
+            let filteredLogos = Object.keys(this.logoStats)
                 .filter(logo => logo.toLowerCase().includes(searchTerm));
 
             const sortField = sortBy.value;
@@ -229,36 +229,23 @@ class Dashboard {
 
             filteredLogos.sort((a, b) => {
                 let aVal, bVal;
+                const dataA = this.logoStats[a];
+                const dataB = this.logoStats[b];
                 
                 switch(sortField) {
                     case 'name':
-                        aVal = a.toLowerCase();
-                        bVal = b.toLowerCase();
-                        break;
+                        return isDesc ? b.localeCompare(a) : a.localeCompare(b);
                     case 'detections':
-                        aVal = this.data[a].detections;
-                        bVal = this.data[b].detections;
-                        break;
+                        return isDesc ? dataB.detections - dataA.detections : dataA.detections - dataB.detections;
                     case 'time':
-                        aVal = this.data[a].time || 0;
-                        bVal = this.data[b].time || 0;
-                        break;
+                        return isDesc ? (dataB.time || 0) - (dataA.time || 0) : (dataA.time || 0) - (dataB.time || 0);
                     case 'percentage':
-                        aVal = this.data[a].percentage || 0;
-                        bVal = this.data[b].percentage || 0;
-                        break;
+                        return isDesc ? (dataB.percentage || 0) - (dataA.percentage || 0) : (dataA.percentage || 0) - (dataB.percentage || 0);
                     case 'frames':
-                        aVal = this.data[a].frames || 0;
-                        bVal = this.data[b].frames || 0;
-                        break;
+                        return isDesc ? (dataB.frames || 0) - (dataA.frames || 0) : (dataA.frames || 0) - (dataB.frames || 0);
                     default:
                         return 0;
                 }
-
-                if (typeof aVal === 'string') {
-                    return isDesc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
-                }
-                return isDesc ? bVal - aVal : aVal - bVal;
             });
 
             this.updateTableWithFilteredData(filteredLogos);
@@ -273,7 +260,7 @@ class Dashboard {
         const tbody = document.getElementById('detailedTableBody');
         
         tbody.innerHTML = logos.map(logo => {
-            const logoData = this.data[logo];
+            const logoData = this.logoStats[logo];
             const performance = this.calculatePerformance(logoData);
             
             let row = `
@@ -313,10 +300,11 @@ class Dashboard {
 
     generateInsights() {
         const container = document.getElementById('insights-list');
-        const logos = Object.keys(this.data);
+        const logos = Object.keys(this.logoStats);
+        if (logos.length === 0) return;
+        
         const insights = [];
 
-        // Total logos insight
         if (logos.length > 20) {
             insights.push({
                 type: 'info',
@@ -325,12 +313,9 @@ class Dashboard {
             });
         }
 
-        // Top performer insight
         if (this.fileType === 'video') {
-            const topLogo = logos.reduce((a, b) => 
-                (this.data[a].percentage || 0) > (this.data[b].percentage || 0) ? a : b, logos[0]
-            );
-            const topPercentage = this.data[topLogo]?.percentage || 0;
+            const topLogo = logos.sort((a, b) => (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0))[0];
+            const topPercentage = this.logoStats[topLogo]?.percentage || 0;
             
             if (topPercentage > 15) {
                 insights.push({
@@ -340,9 +325,8 @@ class Dashboard {
                 });
             }
 
-            // Exposure distribution insight
-            const averageExposure = logos.reduce((sum, logo) => sum + (this.data[logo].percentage || 0), 0) / logos.length;
-            if (averageExposure < 2) {
+            const averageExposure = logos.reduce((sum, logo) => sum + (this.logoStats[logo].percentage || 0), 0) / logos.length;
+            if (averageExposure < 2 && logos.length > 0) {
                 insights.push({
                     type: 'warning',
                     title: 'Low Average Exposure',
@@ -351,9 +335,8 @@ class Dashboard {
             }
         }
 
-        // Detection frequency insight
-        const totalDetections = logos.reduce((sum, logo) => sum + this.data[logo].detections, 0);
-        const avgDetections = totalDetections / logos.length;
+        const totalDetections = logos.reduce((sum, logo) => sum + this.logoStats[logo].detections, 0);
+        const avgDetections = logos.length > 0 ? totalDetections / logos.length : 0;
         
         if (avgDetections > 5) {
             insights.push({
@@ -373,14 +356,12 @@ class Dashboard {
 
     renderPerformanceChart() {
         const ctx = document.getElementById('performanceChart').getContext('2d');
-        const logos = Object.keys(this.data).slice(0, 8);
-        
+        const logos = Object.keys(this.logoStats).slice(0, 8);
+        if (logos.length === 0) return;
+
         const performanceData = logos.map(logo => {
-            const logoData = this.data[logo];
-            if (this.fileType === 'video') {
-                return logoData.percentage || 0;
-            }
-            return logoData.detections;
+            const logoData = this.logoStats[logo];
+            return this.fileType === 'video' ? (logoData.percentage || 0) : logoData.detections;
         });
 
         this.charts.performance = new Chart(ctx, {
@@ -415,10 +396,11 @@ class Dashboard {
         if (this.fileType !== 'video') return;
 
         const ctx = document.getElementById('engagementChart').getContext('2d');
-        const logos = Object.keys(this.data).slice(0, 10);
-        
+        const logos = Object.keys(this.logoStats).slice(0, 10);
+        if (logos.length === 0) return;
+
         const engagementData = logos.map(logo => {
-            const logoData = this.data[logo];
+            const logoData = this.logoStats[logo];
             const frames = logoData.frames || 0;
             const detections = logoData.detections || 0;
             return frames > 0 ? (detections / frames) * 100 : 0;
@@ -470,19 +452,19 @@ class Dashboard {
 
     updateExposureChartType(type) {
         const ctx = document.getElementById('exposureChart').getContext('2d');
-        const logos = Object.keys(this.data)
+        const logos = Object.keys(this.logoStats)
             .sort((a, b) => {
                 if (this.fileType === 'video') {
-                    return (this.data[b].percentage || 0) - (this.data[a].percentage || 0);
+                    return (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0);
                 }
-                return this.data[b].detections - this.data[a].detections;
+                return this.logoStats[b].detections - this.logoStats[a].detections;
             })
             .slice(0, 10);
 
         const data = logos.map(logo => 
             this.fileType === 'video' ? 
-            (this.data[logo].percentage || 0) : 
-            this.data[logo].detections
+            (this.logoStats[logo].percentage || 0) : 
+            this.logoStats[logo].detections
         );
 
         const colors = [
@@ -526,6 +508,63 @@ class Dashboard {
         }
 
         this.charts.exposure = new Chart(ctx, config);
+    }
+
+    setupAgentInterface() {
+        const queryInput = document.getElementById('agent-query-input');
+        const queryButton = document.getElementById('agent-query-button');
+        const responseContainer = document.getElementById('agent-response-container');
+        const loadingSpinner = document.getElementById('agent-loading');
+        const responseElement = document.getElementById('agent-response');
+
+        queryButton.addEventListener('click', () => {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            // Show loading state
+            responseContainer.style.display = 'block';
+            loadingSpinner.style.display = 'block';
+            responseElement.style.display = 'none';
+
+            // Make API call
+            fetch(`/api/agent_query/${this.fileHash}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query: query })
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingSpinner.style.display = 'none';
+                responseElement.style.display = 'block';
+                // Use a library like 'marked' in a real app to safely render markdown
+                responseElement.innerHTML = this.simpleMarkdownToHtml(data.response);
+            })
+            .catch(error => {
+                loadingSpinner.style.display = 'none';
+                responseElement.style.display = 'block';
+                responseElement.innerHTML = `<div class="alert alert-danger">An error occurred: ${error}</div>`;
+            });
+        });
+    }
+
+    simpleMarkdownToHtml(markdown) {
+        // Basic markdown conversion for demonstration purposes.
+        // For a production app, use a robust library like 'marked' or 'showdown'.
+        return markdown
+            .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+            .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+            .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+            .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
+            .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+            .replace(/\*(.*)\*/gim, '<em>$1</em>')
+            .replace(/^- (.*$)/gim, '<li>$1</li>')
+            .replace(/^\* (.*$)/gim, '<li>$1</li>')
+            .replace(/^\s*\n\*/, '<ul>\n*')
+            .replace(/(\n\s*-\s*.*)+/gim, (match) => `<ul>${match.replace(/^\s*-\s*/gm, '<li>')}</ul>`)
+            .replace(/(\n\s*\*\s*.*)+/gim, (match) => `<ul>${match.replace(/^\s*\*\s*/gm, '<li>')}</ul>`)
+            .replace(/\n$/gim, '<br />');
     }
 
     showError(message) {

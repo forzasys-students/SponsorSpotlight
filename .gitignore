@@ -84,3 +84,6 @@ logs/
 output-1.mp4
 output-5.mp4
 output.mp4
+
+# Config files
+config.ini

@@ -310,27 +310,26 @@ body {
     flex: 1;
     height: 25px;
     position: relative;
-    background: #f8f9fa;
-    border-radius: 3px;
-    border: 1px solid #e9ecef;
+    background-color: #30363d; /* Darker background for the track */
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .timeline-segment {
     position: absolute;
     height: 100%;
+    background-color: #3fb950; /* A nice, vibrant green */
     border-radius: 2px;
     cursor: pointer;
     transition: all 0.2s ease;
-    opacity: 0.8;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    opacity: 0.85;
 }
 
 .timeline-segment:hover {
     opacity: 1;
     transform: scaleY(1.1);
+    box-shadow: 0 0 10px #3fb950;
     z-index: 5;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .timeline-segment.active {
@@ -488,6 +487,49 @@ h1, h2, h3, h4, h5, h6 {
 .table-striped > tbody > tr:nth-of-type(odd) > td {
     background-color: rgba(33, 38, 45, 0.4);
 }
+
+/* Agent response */
+#agent-response {
+    background-color: #cce4ff;
+    color: #0d1117;
+    border: 1px solid #58a6ff;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#agent-response h1, 
+#agent-response h2, 
+#agent-response h3 {
+    color: #0550ae;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+#agent-response ul {
+    padding-left: 1.5rem;
+}
+
+#agent-response li {
+    margin-bottom: 0.5rem;
+}
+
+#agent-response strong {
+    color: #0969da;
+}
+
+#agent-response code {
+    background-color: #ddf4ff;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+}
+
+
+
 
 /* Footer styling */
 footer {

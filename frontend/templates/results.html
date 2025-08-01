@@ -153,152 +153,159 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const fileType = '{{ file_type }}';
+            const fileHash = '{{ file_hash }}';
             const video = document.getElementById('mainVideo');
-            let timelineData = {};
-            let videoDuration = 0;
-            
-            // Fetch statistics and populate quick stats
-            fetch('/api/stats/{{ file_hash }}')
+            let videoMetadata = {};
+            let logoStats = {};
+
+            // Fetch main statistics
+            fetch(`/api/stats/${fileHash}`)
                 .then(response => response.json())
                 .then(data => {
-                    timelineData = data;
-                    const logos = Object.keys(data);
-                    const totalDetections = logos.reduce((sum, logo) => sum + data[logo].detections, 0);
-                    const uniqueLogos = logos.length;
-                    
-                    // Update quick stats
-                    document.getElementById('quick-total-detections').textContent = totalDetections.toLocaleString();
-                    document.getElementById('quick-unique-logos').textContent = uniqueLogos;
-                    
-                    if (fileType === 'video') {
-                        const totalExposure = logos.reduce((sum, logo) => sum + (data[logo].time || 0), 0);
-                        const topLogo = logos.reduce((a, b) => 
-                            (data[a].percentage || 0) > (data[b].percentage || 0) ? a : b, logos[0] || '-'
-                        );
-                        
-                        document.getElementById('quick-total-exposure').textContent = `${totalExposure.toFixed(1)}s`;
-                        document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? 
-                            topLogo.substring(0, 12) + '...' : topLogo;
-                        
-                        // Initialize timeline when video is loaded
-                        if (video) {
-                            video.addEventListener('loadedmetadata', function() {
-                                videoDuration = video.duration;
-                                generateTimeline(data);
-                            });
-                            
-                            if (video.readyState >= 1) {
-                                videoDuration = video.duration;
-                                generateTimeline(data);
+                    videoMetadata = data.video_metadata || {};
+                    logoStats = data.logo_stats || {};
+                    updateQuickStats(logoStats);
+
+                    if (fileType === 'video' && video) {
+                        const initialize = () => {
+                            if (video.readyState >= 1) { // HAVE_METADATA or higher
+                                videoMetadata.duration = video.duration;
+                                fetchAccurateTimeline();
                             }
+                        };
+                        video.addEventListener('loadedmetadata', initialize);
+                        if (video.readyState >= 1) {
+                            initialize();
                         }
-                    } else {
-                        const topLogo = logos.reduce((a, b) => 
-                            data[a].detections > data[b].detections ? a : b, logos[0] || '-'
-                        );
-                        document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? 
-                            topLogo.substring(0, 12) + '...' : topLogo;
                     }
                 })
-                .catch(error => {
-                    console.error('Error fetching statistics:', error);
-                    // Set default values on error
-                    document.getElementById('quick-total-detections').textContent = 'Error';
-                    document.getElementById('quick-unique-logos').textContent = 'Error';
-                    if (fileType === 'video') {
-                        document.getElementById('quick-total-exposure').textContent = 'Error';
-                        document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load timeline</div>';
-                    }
-                    document.getElementById('quick-top-logo').textContent = 'Error';
-                });
+                .catch(handleFetchError);
 
-            function generateTimeline(data) {
-                const timelineLoading = document.getElementById('timeline-loading');
+            function fetchAccurateTimeline() {
+                fetch(`/api/timeline_stats/${fileHash}`)
+                    .then(response => response.json())
+                    .then(timelineData => {
+                        generateAccurateTimeline(timelineData, videoMetadata);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching timeline data:', error);
+                        document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load accurate timeline</div>';
+                    });
+            }
+
+            function updateQuickStats(stats) {
+                const logos = Object.keys(stats);
+                const totalDetections = logos.reduce((sum, logo) => sum + stats[logo].detections, 0);
+                const uniqueLogos = logos.length;
+                
+                document.getElementById('quick-total-detections').textContent = totalDetections.toLocaleString();
+                document.getElementById('quick-unique-logos').textContent = uniqueLogos;
+                
+                if (fileType === 'video') {
+                    const totalExposure = logos.reduce((sum, logo) => sum + (stats[logo].time || 0), 0);
+                    const topLogo = logos.sort((a, b) => (stats[b].percentage || 0) - (stats[a].percentage || 0))[0] || '-';
+                    
+                    document.getElementById('quick-total-exposure').textContent = `${totalExposure.toFixed(1)}s`;
+                    document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? `${topLogo.substring(0, 12)}...` : topLogo;
+                } else {
+                    const topLogo = logos.sort((a, b) => stats[b].detections - stats[a].detections)[0] || '-';
+                    document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? `${topLogo.substring(0, 12)}...` : topLogo;
+                }
+            }
+            
+            function generateAccurateTimeline(timelineData, metadata) {
                 const timelineContent = document.getElementById('timeline-content');
-                
-                if (!timelineLoading || !timelineContent || !videoDuration) return;
-                
-                // Get top 5 logos by time/percentage
-                const topLogos = Object.keys(data)
-                    .filter(logo => (data[logo].time || 0) > 0)
-                    .sort((a, b) => (data[b].time || 0) - (data[a].time || 0))
+                const timelineLoading = document.getElementById('timeline-loading');
+
+                const topLogos = Object.keys(logoStats)
+                    .sort((a, b) => (logoStats[b].time || 0) - (logoStats[a].time || 0))
                     .slice(0, 5);
                 
                 if (topLogos.length === 0) {
-                    timelineLoading.innerHTML = '<div class="text-muted">No timeline data available</div>';
+                    timelineLoading.innerHTML = '<div class="text-muted">No timeline data available.</div>';
                     return;
                 }
-                
-                // Generate timeline HTML
+
+                const duration = metadata.duration;
                 let timelineHTML = `
                     <div class="timeline-wrapper">
                         <div class="timeline-header">
                             <span class="timeline-time">0:00</span>
-                            <span class="timeline-time">${formatTime(videoDuration)}</span>
+                            <span class="timeline-time">${formatTime(duration)}</span>
                         </div>
                         <div class="timeline-ruler">
                             <div class="timeline-playhead" id="timeline-playhead"></div>
                         </div>
                 `;
-                
-                topLogos.forEach((logo, index) => {
-                    const logoData = data[logo];
-                    const percentage = logoData.percentage || 0;
-                    const time = logoData.time || 0;
-                    
+
+                topLogos.forEach(logo => {
+                    const frameNumbers = timelineData[logo] || [];
                     timelineHTML += `
                         <div class="timeline-track">
-                            <div class="timeline-label" title="${logo}">${logo.length > 15 ? logo.substring(0, 15) + '...' : logo}</div>
+                            <div class="timeline-label" title="${logo}">${logo.length > 15 ? `${logo.substring(0, 15)}...` : logo}</div>
                             <div class="timeline-bar-container" data-logo="${logo}">
-                                ${generateTimelineSegments(logo, logoData, videoDuration)}
+                                ${generateSegmentsFromFrames(logo, frameNumbers, metadata)}
                             </div>
                         </div>
                     `;
                 });
-                
+
                 timelineHTML += '</div>';
-                
                 timelineContent.innerHTML = timelineHTML;
-                timelineLoading.classList.add('d-none');
+                timelineLoading.style.display = 'none';
                 timelineContent.classList.remove('d-none');
                 
-                // Add event listeners
                 setupTimelineInteraction();
             }
-            
-            function generateTimelineSegments(logo, logoData, duration) {
-                // Simulate timeline segments based on logo data
-                // In a real implementation, you'd have frame-by-frame detection data
+
+            function generateSegmentsFromFrames(logo, frames, metadata) {
+                if (frames.length === 0) return '';
+                
+                const frameGapTolerance = 5; // Allow a gap of up to 5 frames
                 const segments = [];
-                const logoTime = logoData.time || 0;
-                const logoFrames = logoData.frames || 0;
+                let startFrame = frames[0];
                 
-                if (logoTime === 0) return '';
+                for (let i = 1; i < frames.length; i++) {
+                    // If the gap is larger than our tolerance, create a new segment
+                    if (frames[i] - frames[i - 1] > frameGapTolerance) {
+                        segments.push({ start: startFrame, end: frames[i - 1] });
+                        startFrame = frames[i];
+                    }
+                }
+                // Add the last segment
+                segments.push({ start: startFrame, end: frames[frames.length - 1] });
                 
-                // Generate segments based on logo exposure
-                // This is a simplified approach - in reality you'd have actual frame timing data
-                const segmentCount = Math.min(Math.ceil(logoTime / 5), 8); // Max 8 segments per logo
-                const segmentDuration = logoTime / segmentCount;
-                
-                for (let i = 0; i < segmentCount; i++) {
-                    const startTime = (i * duration) / segmentCount + Math.random() * (duration / segmentCount * 0.3);
-                    const endTime = startTime + segmentDuration + Math.random() * segmentDuration * 0.5;
-                    
+                const fps = metadata.fps;
+                const duration = metadata.duration;
+
+                return segments.map(seg => {
+                    const startTime = seg.start / fps;
+                    const endTime = seg.end / fps;
                     const startPercent = (startTime / duration) * 100;
-                    const widthPercent = ((endTime - startTime) / duration) * 100;
+                    // Ensure width is at least a minimum value to be visible
+                    const widthPercent = Math.max(((endTime - startTime) / duration) * 100, 0.1);
                     
-                    segments.push(`
+                    return `
                         <div class="timeline-segment" 
                              data-logo="${logo}"
                              data-start="${startTime.toFixed(2)}"
                              data-end="${endTime.toFixed(2)}"
-                             style="left: ${startPercent}%; width: ${widthPercent}%;"
+                             style="left: ${startPercent.toFixed(2)}%; width: ${widthPercent.toFixed(2)}%;"
                              title="${logo}: ${formatTime(startTime)} - ${formatTime(endTime)}">
                         </div>
-                    `);
+                    `;
+                }).join('');
+            }
+
+            function handleFetchError(error) {
+                console.error('Error fetching statistics:', error);
+                document.getElementById('quick-total-detections').textContent = 'Error';
+                document.getElementById('quick-unique-logos').textContent = 'Error';
+                if (fileType === 'video') {
+                    document.getElementById('quick-total-exposure').textContent = 'Error';
+                    document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load timeline</div>';
                 }
-                
-                return segments.join('');
+                document.getElementById('quick-top-logo').textContent = 'Error';
             }
             
             function setupTimelineInteraction() {

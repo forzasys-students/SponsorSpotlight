@@ -282,22 +282,24 @@ class InferenceManager:
         # Generate output paths within the new directory
         output_path = os.path.join(result_dir, 'output.mp4')
         stats_file = os.path.join(result_dir, 'stats.json')
+        timeline_stats_file = os.path.join(result_dir, 'timeline_stats.json')
         
         # Open the video
         cap = cv2.VideoCapture(video_path)
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(output_path, fourcc, cap.get(cv2.CAP_PROP_FPS), 
-                             (int(cap.get(3)), int(cap.get(4))))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        out = cv2.VideoWriter(output_path, fourcc, fps, 
+                                 (int(cap.get(3)), int(cap.get(4))))
         
         # Get video properties
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_time = 1 / fps
-        frame_count = 0
-        total_video_time = cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps
+        frame_time = 1 / fps if fps > 0 else 0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        total_video_time = total_frames / fps if fps > 0 else 0
+        frame_count = 0
         
         # Initialize statistics tracking
-        logo_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+        aggregated_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+        frame_by_frame_detections = defaultdict(list)
         
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
@@ -316,37 +318,37 @@ class InferenceManager:
             frame_count += 1
             results = self.model(frame)
             
-            logo_count = Counter()
-            seen_main_logos = set()
-            
+            logos_in_frame = Counter()
+            main_logos_in_frame = set()
+
             # Count logo detections in the frame
             for result in results:
-                obb = result.obb
-                if obb is None:
+                if result.obb is None:
                     continue
                 
-                for i in range(len(obb.conf)):
-                    cls = int(obb.cls[i])
+                for i in range(len(result.obb.conf)):
+                    cls = int(result.obb.cls[i])
                     class_name = self.class_names[cls]
-                    logo_count[class_name] += 1
+                    logos_in_frame[class_name] += 1
+
+            # Aggregate stats for the current frame
+            for logo, count in logos_in_frame.items():
+                main_logo = self.logo_groups.get(logo, logo)
+                aggregated_stats[main_logo]["detections"] += count
+                main_logos_in_frame.add(main_logo)
             
-            # Update statistics
-            for logo, count in logo_count.items():
-                if count > 0:
-                    main_logo = self.logo_groups.get(logo, logo)
-                    logo_stats[logo]["detections"] += count
-                    
-                    if main_logo not in seen_main_logos:
-                        logo_stats[logo]["frames"] += 1
-                        logo_stats[logo]["time"] += frame_time
-                        seen_main_logos.add(main_logo)
-            
+            # Update frame-based stats for unique main logos in the frame
+            for main_logo in main_logos_in_frame:
+                aggregated_stats[main_logo]["frames"] += 1
+                aggregated_stats[main_logo]["time"] += frame_time
+                frame_by_frame_detections[main_logo].append(frame_count)
+
             # Annotate and write the frame
             annotated_frame = self._annotate_frame(frame, results)
             out.write(annotated_frame)
             
             # Update progress
-            progress_percentage = (frame_count / total_frames) * 100
+            progress_percentage = (frame_count / total_frames) * 100 if total_frames > 0 else 0
             self.progress.update_progress(
                 ProgressStage.INFERENCE_PROGRESS,
                 f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
@@ -359,26 +361,37 @@ class InferenceManager:
         cap.release()
         out.release()
         
-        # Aggregate statistics
+        # Finalize statistics
         self.progress.update_progress(
             ProgressStage.POST_PROCESSING,
             "Aggregating statistics"
         )
         
-        aggregated_stats = self._aggregate_stats(logo_stats)
-        
         # Calculate percentages and round values
+        final_stats = {}
         for logo, stats in aggregated_stats.items():
             time_value = round(stats["time"], 2)
-            if time_value > total_video_time:
-                time_value = total_video_time
-            
-            stats["time"] = time_value
-            stats["percentage"] = round((time_value / total_video_time * 100) if total_video_time > 0 else 0, 2)
-        
-        # Save statistics
+            stats["time"] = min(time_value, total_video_time)
+            stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
+            final_stats[logo] = stats
+
+        # Prepare final JSON output with metadata
+        output_data = {
+            "video_metadata": {
+                "duration": round(total_video_time, 2),
+                "fps": round(fps, 2),
+                "total_frames": total_frames
+            },
+            "logo_stats": final_stats
+        }
+
+        # Save aggregated statistics
         with open(stats_file, "w") as f:
-            json.dump(aggregated_stats, f, indent=4)
+            json.dump(output_data, f, indent=4)
+
+        # Save frame-by-frame statistics
+        with open(timeline_stats_file, "w") as f:
+            json.dump(frame_by_frame_detections, f)
         
         # Update progress
         self.progress.update_progress(
