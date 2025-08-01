@@ -217,6 +217,14 @@ def agent_query(file_hash):
     # Load the stats data
     with open(stats_path, 'r') as f:
         stats_data = json.load(f)
+    
+    # Load the timeline stats data
+    timeline_stats_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'timeline_stats.json')
+    if not os.path.exists(timeline_stats_path):
+        return jsonify({'error': 'Timeline statistics not found for this file'}), 404
+    
+    with open(timeline_stats_path, 'r') as f:
+        timeline_stats_data = json.load(f)
         
     # Get the video path for the share node
     video_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'output.mp4')
@@ -224,6 +232,7 @@ def agent_query(file_hash):
     # Prepare file info for the agent
     file_info = {
         'stats_data': stats_data,
+        'timeline_stats_data': timeline_stats_data,
         'video_path': video_path
     }
 
