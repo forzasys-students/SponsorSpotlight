@@ -215,10 +215,19 @@ def agent_query(file_hash):
     with open(stats_path, 'r') as f:
         stats_data = json.load(f)
         
+    # Get the video path for the share node
+    video_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'output.mp4')
+
+    # Prepare file info for the agent
+    file_info = {
+        'stats_data': stats_data,
+        'video_path': video_path
+    }
+
     # Route the query using the agent router
     from backend.agent.router import AgentRouter
     router = AgentRouter()
-    result = router.route_query(query, stats_data)
+    result = router.route_query(query, file_info)
     
     return jsonify({'response': result})
 
