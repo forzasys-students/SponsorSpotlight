@@ -15,27 +15,31 @@ class ShareNode:
             self.instagram_user_id,
         ) = config_manager.get_instagram_credentials()
 
-    def share_video(self, video_path, caption):
+    def share_video(self, video_path, caption, task_manager, task_id):
         """
-        Uploads the video to FTP and shares it on Instagram.
+        Uploads the video to FTP and shares it on Instagram, reporting progress.
         """
         # Upload to FTP
         ftp_uploader = FTPUploader(
             self.ftp_hostname, self.ftp_username, self.ftp_password
         )
-        video_filename = ftp_uploader.upload_file(video_path)
+        video_filename = ftp_uploader.upload_file(video_path, task_manager, task_id)
         if not video_filename:
-            return "Failed to upload video to FTP."
+            result = "Failed to upload video to FTP."
+            task_manager.complete_task(task_id, result, success=False)
+            return
 
-        video_url = f"{self.ftp_public_url_base}/{video_filename}"
+        video_url = f"{self.ftp_public_url_base.rstrip('/')}/{video_filename}"
 
         # Share on Instagram
         instagram_publisher = InstagramPublisher(
             self.instagram_access_token, self.instagram_user_id
         )
-        publication_id = instagram_publisher.publish_video(video_url, caption)
+        publication_id, permalink = instagram_publisher.publish_video(video_url, caption, task_manager, task_id)
 
-        if publication_id:
-            return f"Video successfully shared to Instagram with publication ID: {publication_id}"
+        if publication_id and permalink:
+            result = f"Video successfully shared! View it here: {permalink}"
+            task_manager.complete_task(task_id, result, success=True)
         else:
-            return "Failed to share video on Instagram."
+            result = "Failed to share video on Instagram. Check the logs for details."
+            task_manager.complete_task(task_id, result, success=False)

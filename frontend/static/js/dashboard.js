@@ -516,30 +516,58 @@ class Dashboard {
         const responseContainer = document.getElementById('agent-response-container');
         const loadingSpinner = document.getElementById('agent-loading');
         const responseElement = document.getElementById('agent-response');
+        const loadingText = loadingSpinner.querySelector('p');
+
+        const pollTaskStatus = (taskId) => {
+            const interval = setInterval(() => {
+                fetch(`/api/agent_task_status/${taskId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status !== 'not_found') {
+                            loadingText.textContent = data.message;
+                        }
+
+                        if (data.is_complete) {
+                            clearInterval(interval);
+                            loadingSpinner.style.display = 'none';
+                            responseElement.style.display = 'block';
+                            responseElement.innerHTML = this.simpleMarkdownToHtml(data.result);
+                        }
+                    })
+                    .catch(error => {
+                        clearInterval(interval);
+                        loadingSpinner.style.display = 'none';
+                        responseElement.style.display = 'block';
+                        responseElement.innerHTML = `<div class="alert alert-danger">Error polling task status: ${error}</div>`;
+                    });
+            }, 2000); // Poll every 2 seconds
+        };
 
         queryButton.addEventListener('click', () => {
             const query = queryInput.value.trim();
             if (!query) return;
 
-            // Show loading state
             responseContainer.style.display = 'block';
             loadingSpinner.style.display = 'block';
             responseElement.style.display = 'none';
+            loadingText.textContent = "Sending request to agent...";
 
-            // Make API call
             fetch(`/api/agent_query/${this.fileHash}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query })
             })
             .then(response => response.json())
             .then(data => {
-                loadingSpinner.style.display = 'none';
-                responseElement.style.display = 'block';
-                // Use a library like 'marked' in a real app to safely render markdown
-                responseElement.innerHTML = this.simpleMarkdownToHtml(data.response);
+                if (data.task_id) {
+                    // This is an async task, start polling
+                    pollTaskStatus(data.task_id);
+                } else {
+                    // This was a sync task (like analysis)
+                    loadingSpinner.style.display = 'none';
+                    responseElement.style.display = 'block';
+                    responseElement.innerHTML = this.simpleMarkdownToHtml(data.response);
+                }
             })
             .catch(error => {
                 loadingSpinner.style.display = 'none';
@@ -551,8 +579,9 @@ class Dashboard {
 
     simpleMarkdownToHtml(markdown) {
         // Basic markdown conversion for demonstration purposes.
-        // For a production app, use a robust library like 'marked' or 'showdown'.
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
         return markdown
+            .replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
             .replace(/^# (.*$)/gim, '<h1>$1</h1>')
@@ -561,7 +590,6 @@ class Dashboard {
             .replace(/\*(.*)\*/gim, '<em>$1</em>')
             .replace(/^- (.*$)/gim, '<li>$1</li>')
             .replace(/^\* (.*$)/gim, '<li>$1</li>')
-            .replace(/^\s*\n\*/, '<ul>\n*')
             .replace(/(\n\s*-\s*.*)+/gim, (match) => `<ul>${match.replace(/^\s*-\s*/gm, '<li>')}</ul>`)
             .replace(/(\n\s*\*\s*.*)+/gim, (match) => `<ul>${match.replace(/^\s*\*\s*/gm, '<li>')}</ul>`)
             .replace(/\n$/gim, '<br />');

@@ -8,6 +8,8 @@ import json
 
 from backend.core.inference_manager import InferenceManager
 from backend.utils.progress_manager import ProgressManager
+from backend.utils.agent_task_manager import AgentTaskManager
+import threading
 
 # Get absolute paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +44,7 @@ print(f"Results directory: {RESULTS_DIR}")
 # Initialize managers
 progress_manager = ProgressManager()
 inference_manager = InferenceManager(progress_manager)
+agent_task_manager = AgentTaskManager()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
@@ -224,12 +227,31 @@ def agent_query(file_hash):
         'video_path': video_path
     }
 
-    # Route the query using the agent router
     from backend.agent.router import AgentRouter
     router = AgentRouter()
-    result = router.route_query(query, file_info)
-    
-    return jsonify({'response': result})
+
+    # Check if this is a share task
+    if any(keyword in query.lower() for keyword in ['share', 'post', 'instagram']):
+        task_id = agent_task_manager.create_task()
+        
+        # Run the task in a background thread
+        thread = threading.Thread(target=router.route_query, args=(query, file_info, agent_task_manager, task_id))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'task_id': task_id})
+
+    else:
+        # Handle synchronous tasks like analysis
+        result = router.route_query(query, file_info)
+        return jsonify({'response': result})
+
+@app.route('/api/agent_task_status/<task_id>')
+def agent_task_status(task_id):
+    """API endpoint to get the status of an agent task."""
+    status = agent_task_manager.get_task_status(task_id)
+    return jsonify(status)
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5005)

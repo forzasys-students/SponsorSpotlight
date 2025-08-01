@@ -16,7 +16,7 @@ class AgentRouter:
         self.analysis_node = AnalysisNode()
         self.share_node = ShareNode()
 
-    def route_query(self, query, file_info):
+    def route_query(self, query, file_info, task_manager=None, task_id=None):
         """
         Routes the user's query to the correct node.
         """
@@ -29,7 +29,8 @@ class AgentRouter:
             return self.analysis_node.analyze(file_info['stats_data'])
         elif any(keyword in normalized_query for keyword in share_keywords):
             caption = self._extract_caption(query)
-            return self.share_node.share_video(file_info['video_path'], caption)
+            # This is now an async task, so it doesn't return directly
+            self.share_node.share_video(file_info['video_path'], caption, task_manager, task_id)
         else:
             return self._handle_unknown_query()
 

@@ -8,21 +8,40 @@ class InstagramPublisher:
         self.graph_api_version = 'v18.0'
         self.base_url = f"https://graph.facebook.com/{self.graph_api_version}"
 
-    def publish_video(self, video_url, caption=''):
+    def publish_video(self, video_url, caption='', task_manager=None, task_id=None):
         """
         Publishes a video to Instagram using the Content Publishing API.
         """
+        def report(msg):
+            if task_manager and task_id:
+                task_manager.update_progress(task_id, msg)
+
         # Step 1: Create a media container
+        report("Creating Instagram media container...")
         container_id = self._create_media_container(video_url, caption)
         if not container_id:
-            return None
+            report("Failed to create Instagram media container.")
+            return None, "Failed to create Instagram media container."
 
         # Step 2: Wait for the container to be ready
-        if not self._wait_for_container_ready(container_id):
-            return None
+        report("Waiting for Instagram to process the video...")
+        if not self._wait_for_container_ready(container_id, report_progress=report):
+            report("Instagram media processing failed or timed out.")
+            return None, "Instagram media processing failed or timed out."
 
         # Step 3: Publish the media container
-        return self._publish_media_container(container_id)
+        report("Publishing video to Instagram...")
+        publication_id = self._publish_media_container(container_id)
+        if not publication_id:
+            report("Failed to publish video.")
+            return None, "Failed to publish video."
+
+        # Step 4: Get the permalink
+        report("Fetching post URL...")
+        permalink = self._get_media_permalink(publication_id)
+
+        report("Video published successfully!")
+        return publication_id, permalink
 
     def _create_media_container(self, video_url, caption):
         """
@@ -45,7 +64,7 @@ class InstagramPublisher:
             print(f"Response: {e.response.text}")
             return None
 
-    def _wait_for_container_ready(self, container_id, timeout=300, interval=15):
+    def _wait_for_container_ready(self, container_id, timeout=300, interval=15, report_progress=None):
         """
         Polls the media container status until it's finished or times out.
         """
@@ -61,7 +80,8 @@ class InstagramPublisher:
                 response.raise_for_status()
                 status = response.json().get('status_code')
                 
-                print(f"Polling container status: {status}")
+                if report_progress:
+                    report_progress(f"Polling Instagram status: {status}...")
                 
                 if status == 'FINISHED':
                     return True
@@ -95,4 +115,21 @@ class InstagramPublisher:
         except requests.exceptions.RequestException as e:
             print(f"Error publishing media container: {e}")
             print(f"Response: {e.response.text}")
+            return None
+
+    def _get_media_permalink(self, media_id):
+        """
+        Retrieves the permalink for a published media item.
+        """
+        url = f"{self.base_url}/{media_id}"
+        params = {
+            'fields': 'permalink',
+            'access_token': self.access_token
+        }
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            return response.json().get('permalink')
+        except requests.exceptions.RequestException as e:
+            print(f"Error getting media permalink: {e}")
             return None
