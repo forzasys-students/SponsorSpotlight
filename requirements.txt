@@ -1,0 +1,11 @@
+flask>=2.0.0
+werkzeug>=2.0.0
+ultralytics>=8.0.0
+torch>=1.7.0
+torchvision>=0.8.1
+opencv-python>=4.5.0
+numpy>=1.19.0
+pillow>=8.0.0
+tqdm>=4.41.0
+requests>=2.25.0
+python-dotenv>=0.15.0

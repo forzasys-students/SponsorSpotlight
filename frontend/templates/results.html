@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - SponsorSpotlight</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">SponsorSpotlight</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10 col-xl-8">
+                <!-- Header with file info and action buttons -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h1 class="mb-1">Processing Complete</h1>
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-file-earmark"></i> {{ original_name }}
+                            <span class="badge bg-primary ms-2">{{ file_type.title() }}</span>
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('show_dashboard', file_hash=file_hash) }}" class="btn btn-success btn-lg">
+                            <i class="bi bi-graph-up"></i> Analytics Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Main result container -->
+                <div class="card result-card">
+                    <div class="card-body p-0">
+                        {% if file_type == 'image' %}
+                            <div class="image-result-container">
+                                <img src="{{ url_for('static', filename=output_path) }}" class="img-fluid rounded" alt="Processed image with logo detections">
+                            </div>
+                        {% else %}
+                            <div class="video-result-container">
+                                <video id="mainVideo" controls class="w-100 rounded" poster="">
+                                    <source src="{{ url_for('static', filename=output_path) }}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Interactive Timeline (for videos only) -->
+                {% if file_type == 'video' %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock-history"></i> Logo Detection Timeline
+                            <small class="text-muted ms-2">Click on segments to jump to that time</small>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="timeline-container">
+                            <div id="timeline-loading" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading timeline...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Generating timeline...</p>
+                            </div>
+                            <div id="timeline-content" class="d-none">
+                                <!-- Timeline will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Quick stats summary -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-eye-fill text-primary stat-icon-sm"></i>
+                                    <h4 id="quick-total-detections" class="mb-0">-</h4>
+                                    <small class="text-muted">Total Detections</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-award-fill text-success stat-icon-sm"></i>
+                                    <h4 id="quick-unique-logos" class="mb-0">-</h4>
+                                    <small class="text-muted">Unique Logos</small>
+                                </div>
+                            </div>
+                            {% if file_type == 'video' %}
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-clock-fill text-warning stat-icon-sm"></i>
+                                    <h4 id="quick-total-exposure" class="mb-0">-</h4>
+                                    <small class="text-muted">Total Exposure</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-trophy-fill text-danger stat-icon-sm"></i>
+                                    <h4 id="quick-top-logo" class="mb-0">-</h4>
+                                    <small class="text-muted">Top Logo</small>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="col-md-6">
+                                <div class="quick-stat">
+                                    <i class="bi bi-trophy-fill text-danger stat-icon-sm"></i>
+                                    <h4 id="quick-top-logo" class="mb-0">-</h4>
+                                    <small class="text-muted">Most Detected</small>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="/" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> Process Another File
+                    </a>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" onclick="downloadResults()">
+                            <i class="bi bi-download"></i> Download
+                        </button>
+                        <a href="{{ url_for('show_dashboard', file_hash=file_hash) }}" class="btn btn-success">
+                            <i class="bi bi-graph-up"></i> View Full Analytics
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-white mt-5 py-3">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2023 SponsorSpotlight</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileType = '{{ file_type }}';
+            const video = document.getElementById('mainVideo');
+            let timelineData = {};
+            let videoDuration = 0;
+            
+            // Fetch statistics and populate quick stats
+            fetch('/api/stats/{{ file_hash }}')
+                .then(response => response.json())
+                .then(data => {
+                    timelineData = data;
+                    const logos = Object.keys(data);
+                    const totalDetections = logos.reduce((sum, logo) => sum + data[logo].detections, 0);
+                    const uniqueLogos = logos.length;
+                    
+                    // Update quick stats
+                    document.getElementById('quick-total-detections').textContent = totalDetections.toLocaleString();
+                    document.getElementById('quick-unique-logos').textContent = uniqueLogos;
+                    
+                    if (fileType === 'video') {
+                        const totalExposure = logos.reduce((sum, logo) => sum + (data[logo].time || 0), 0);
+                        const topLogo = logos.reduce((a, b) => 
+                            (data[a].percentage || 0) > (data[b].percentage || 0) ? a : b, logos[0] || '-'
+                        );
+                        
+                        document.getElementById('quick-total-exposure').textContent = `${totalExposure.toFixed(1)}s`;
+                        document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? 
+                            topLogo.substring(0, 12) + '...' : topLogo;
+                        
+                        // Initialize timeline when video is loaded
+                        if (video) {
+                            video.addEventListener('loadedmetadata', function() {
+                                videoDuration = video.duration;
+                                generateTimeline(data);
+                            });
+                            
+                            if (video.readyState >= 1) {
+                                videoDuration = video.duration;
+                                generateTimeline(data);
+                            }
+                        }
+                    } else {
+                        const topLogo = logos.reduce((a, b) => 
+                            data[a].detections > data[b].detections ? a : b, logos[0] || '-'
+                        );
+                        document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? 
+                            topLogo.substring(0, 12) + '...' : topLogo;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching statistics:', error);
+                    // Set default values on error
+                    document.getElementById('quick-total-detections').textContent = 'Error';
+                    document.getElementById('quick-unique-logos').textContent = 'Error';
+                    if (fileType === 'video') {
+                        document.getElementById('quick-total-exposure').textContent = 'Error';
+                        document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load timeline</div>';
+                    }
+                    document.getElementById('quick-top-logo').textContent = 'Error';
+                });
+
+            function generateTimeline(data) {
+                const timelineLoading = document.getElementById('timeline-loading');
+                const timelineContent = document.getElementById('timeline-content');
+                
+                if (!timelineLoading || !timelineContent || !videoDuration) return;
+                
+                // Get top 5 logos by time/percentage
+                const topLogos = Object.keys(data)
+                    .filter(logo => (data[logo].time || 0) > 0)
+                    .sort((a, b) => (data[b].time || 0) - (data[a].time || 0))
+                    .slice(0, 5);
+                
+                if (topLogos.length === 0) {
+                    timelineLoading.innerHTML = '<div class="text-muted">No timeline data available</div>';
+                    return;
+                }
+                
+                // Generate timeline HTML
+                let timelineHTML = `
+                    <div class="timeline-wrapper">
+                        <div class="timeline-header">
+                            <span class="timeline-time">0:00</span>
+                            <span class="timeline-time">${formatTime(videoDuration)}</span>
+                        </div>
+                        <div class="timeline-ruler">
+                            <div class="timeline-playhead" id="timeline-playhead"></div>
+                        </div>
+                `;
+                
+                topLogos.forEach((logo, index) => {
+                    const logoData = data[logo];
+                    const percentage = logoData.percentage || 0;
+                    const time = logoData.time || 0;
+                    
+                    timelineHTML += `
+                        <div class="timeline-track">
+                            <div class="timeline-label" title="${logo}">${logo.length > 15 ? logo.substring(0, 15) + '...' : logo}</div>
+                            <div class="timeline-bar-container" data-logo="${logo}">
+                                ${generateTimelineSegments(logo, logoData, videoDuration)}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                timelineHTML += '</div>';
+                
+                timelineContent.innerHTML = timelineHTML;
+                timelineLoading.classList.add('d-none');
+                timelineContent.classList.remove('d-none');
+                
+                // Add event listeners
+                setupTimelineInteraction();
+            }
+            
+            function generateTimelineSegments(logo, logoData, duration) {
+                // Simulate timeline segments based on logo data
+                // In a real implementation, you'd have frame-by-frame detection data
+                const segments = [];
+                const logoTime = logoData.time || 0;
+                const logoFrames = logoData.frames || 0;
+                
+                if (logoTime === 0) return '';
+                
+                // Generate segments based on logo exposure
+                // This is a simplified approach - in reality you'd have actual frame timing data
+                const segmentCount = Math.min(Math.ceil(logoTime / 5), 8); // Max 8 segments per logo
+                const segmentDuration = logoTime / segmentCount;
+                
+                for (let i = 0; i < segmentCount; i++) {
+                    const startTime = (i * duration) / segmentCount + Math.random() * (duration / segmentCount * 0.3);
+                    const endTime = startTime + segmentDuration + Math.random() * segmentDuration * 0.5;
+                    
+                    const startPercent = (startTime / duration) * 100;
+                    const widthPercent = ((endTime - startTime) / duration) * 100;
+                    
+                    segments.push(`
+                        <div class="timeline-segment" 
+                             data-logo="${logo}"
+                             data-start="${startTime.toFixed(2)}"
+                             data-end="${endTime.toFixed(2)}"
+                             style="left: ${startPercent}%; width: ${widthPercent}%;"
+                             title="${logo}: ${formatTime(startTime)} - ${formatTime(endTime)}">
+                        </div>
+                    `);
+                }
+                
+                return segments.join('');
+            }
+            
+            function setupTimelineInteraction() {
+                const segments = document.querySelectorAll('.timeline-segment');
+                const playhead = document.getElementById('timeline-playhead');
+                const tooltip = createTooltip();
+                
+                segments.forEach(segment => {
+                    segment.addEventListener('click', function() {
+                        const startTime = parseFloat(this.dataset.start);
+                        if (video) {
+                            video.currentTime = startTime;
+                            updatePlayhead();
+                        }
+                        
+                        // Remove active class from all segments
+                        segments.forEach(s => s.classList.remove('active'));
+                        this.classList.add('active');
+                    });
+                    
+                    segment.addEventListener('mouseenter', function(e) {
+                        const logo = this.dataset.logo;
+                        const start = formatTime(parseFloat(this.dataset.start));
+                        const end = formatTime(parseFloat(this.dataset.end));
+                        
+                        tooltip.textContent = `${logo}: ${start} - ${end}`;
+                        tooltip.style.display = 'block';
+                        updateTooltipPosition(e, tooltip);
+                        tooltip.classList.add('show');
+                    });
+                    
+                    segment.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('show');
+                        setTimeout(() => {
+                            if (!tooltip.classList.contains('show')) {
+                                tooltip.style.display = 'none';
+                            }
+                        }, 200);
+                    });
+                    
+                    segment.addEventListener('mousemove', function(e) {
+                        updateTooltipPosition(e, tooltip);
+                    });
+                });
+                
+                // Update playhead position as video plays
+                if (video) {
+                    video.addEventListener('timeupdate', updatePlayhead);
+                }
+                
+                function updatePlayhead() {
+                    if (!video || !playhead || !videoDuration) return;
+                    
+                    const progress = (video.currentTime / videoDuration) * 100;
+                    playhead.style.left = `${progress}%`;
+                }
+            }
+            
+            function createTooltip() {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'timeline-tooltip';
+                document.body.appendChild(tooltip);
+                return tooltip;
+            }
+            
+            function updateTooltipPosition(e, tooltip) {
+                const rect = tooltip.getBoundingClientRect();
+                const x = e.pageX - rect.width / 2;
+                const y = e.pageY - rect.height - 10;
+                
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `${y}px`;
+            }
+            
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+        });
+
+        // Download function
+        function downloadResults() {
+            const fileHash = '{{ file_hash }}';
+            const fileType = '{{ file_type }}';
+            const extension = fileType === 'image' ? 'jpg' : 'mp4';
+            
+            // Create a temporary link to download the processed file
+            const link = document.createElement('a');
+            link.href = '{{ url_for("static", filename=output_path) }}';
+            link.download = `processed_${fileHash}.${extension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
