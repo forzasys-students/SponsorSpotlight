@@ -87,3 +87,6 @@ output.mp4
 
 # Config files
 config.ini
+
+# Training data
+train/ready-training
