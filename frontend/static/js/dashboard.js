@@ -81,7 +81,7 @@ class Dashboard {
             const safeName = (typeof topCoverageLogo === 'string' && topCoverageLogo.length) ? topCoverageLogo : '-';
             const name = safeName.length > 15 ? safeName.substring(0, 15) + '...' : safeName;
             const value = isNaN(topCoverageValue) ? 0 : topCoverageValue;
-            topCoverageEl.textContent = `${name} (${value.toFixed(2)}%)`;
+            topCoverageEl.textContent = `${name}`;
         }
     }
 
