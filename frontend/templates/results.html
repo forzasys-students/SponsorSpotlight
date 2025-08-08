@@ -233,9 +233,8 @@
                             <span class="timeline-time">0:00</span>
                             <span class="timeline-time">${formatTime(duration)}</span>
                         </div>
-                        <div class="timeline-ruler">
-                            <div class="timeline-playhead" id="timeline-playhead"></div>
-                        </div>
+                        <div class="timeline-ruler"></div>
+                        <div class="timeline-playhead" id="timeline-playhead"></div>
                 `;
 
                 topLogos.forEach(logo => {
@@ -312,31 +311,50 @@
                 const segments = document.querySelectorAll('.timeline-segment');
                 const playhead = document.getElementById('timeline-playhead');
                 const tooltip = createTooltip();
-                
+                const wrapper = document.querySelector('.timeline-wrapper');
+                const ruler = document.querySelector('.timeline-ruler');
+                const totalDuration = videoMetadata.duration || (video ? video.duration : 0);
+                let isDragging = false;
+
+                const layoutPlayhead = () => {
+                    if (!wrapper || !ruler || !playhead) return;
+                    const top = ruler.offsetTop;
+                    // Height from top of ruler down to end of tracks container
+                    const tracks = document.querySelectorAll('.timeline-track');
+                    const lastTrack = tracks[tracks.length - 1];
+                    const bottom = lastTrack ? (lastTrack.offsetTop + lastTrack.offsetHeight) : wrapper.offsetHeight;
+                    const height = Math.max(0, bottom - top);
+                    playhead.style.top = `${top}px`;
+                    playhead.style.height = `${height}px`;
+                };
+
+                const setCurrentTimeFromClientX = (clientX) => {
+                    if (!ruler || !video || !totalDuration) return;
+                    const rect = ruler.getBoundingClientRect();
+                    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                    video.currentTime = pct * totalDuration;
+                    updatePlayhead();
+                };
+
                 segments.forEach(segment => {
-                    segment.addEventListener('click', function() {
+                    segment.addEventListener('click', function(e) {
                         const startTime = parseFloat(this.dataset.start);
-                        if (video) {
+                        if (video && !isNaN(startTime)) {
                             video.currentTime = startTime;
                             updatePlayhead();
                         }
-                        
-                        // Remove active class from all segments
                         segments.forEach(s => s.classList.remove('active'));
                         this.classList.add('active');
                     });
-                    
                     segment.addEventListener('mouseenter', function(e) {
                         const logo = this.dataset.logo;
                         const start = formatTime(parseFloat(this.dataset.start));
                         const end = formatTime(parseFloat(this.dataset.end));
-                        
                         tooltip.textContent = `${logo}: ${start} - ${end}`;
                         tooltip.style.display = 'block';
                         updateTooltipPosition(e, tooltip);
                         tooltip.classList.add('show');
                     });
-                    
                     segment.addEventListener('mouseleave', function() {
                         tooltip.classList.remove('show');
                         setTimeout(() => {
@@ -345,23 +363,49 @@
                             }
                         }, 200);
                     });
-                    
                     segment.addEventListener('mousemove', function(e) {
                         updateTooltipPosition(e, tooltip);
                     });
                 });
-                
-                // Update playhead position as video plays
+
+                // Dragging on playhead
+                if (playhead) {
+                    playhead.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        e.preventDefault();
+                    });
+                }
+                document.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        setCurrentTimeFromClientX(e.clientX);
+                    }
+                });
+                document.addEventListener('mouseup', () => { isDragging = false; });
+
+                // Clicking/dragging on ruler to seek
+                if (ruler) {
+                    ruler.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        setCurrentTimeFromClientX(e.clientX);
+                    });
+                }
+
+                // Update playhead as video plays (aligned to ruler start)
+                function updatePlayhead() {
+                    if (!video || !playhead || !totalDuration || !ruler || !wrapper) return;
+                    const wrapperRect = wrapper.getBoundingClientRect();
+                    const rulerRect = ruler.getBoundingClientRect();
+                    const pct = Math.min(1, Math.max(0, video.currentTime / totalDuration));
+                    const leftPx = (rulerRect.left - wrapperRect.left) + pct * rulerRect.width;
+                    playhead.style.left = `${leftPx}px`;
+                }
                 if (video) {
                     video.addEventListener('timeupdate', updatePlayhead);
                 }
-                
-                function updatePlayhead() {
-                    if (!video || !playhead || !videoDuration) return;
-                    
-                    const progress = (video.currentTime / videoDuration) * 100;
-                    playhead.style.left = `${progress}%`;
-                }
+
+                layoutPlayhead();
+                window.addEventListener('resize', layoutPlayhead);
+                updatePlayhead();
             }
             
             function createTooltip() {

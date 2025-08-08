@@ -246,6 +246,8 @@ body {
     align-items: center;
     margin-bottom: 15px;
     padding: 0 10px;
+    /* Align left time label with the start of the ruler/bars */
+    padding-left: 140px;
 }
 
 .timeline-time {
@@ -261,6 +263,8 @@ body {
     border-radius: 2px;
     margin-bottom: 10px;
     border: 1px solid #dee2e6;
+    /* Align ruler start with bars by offsetting the label width */
+    margin-left: 140px;
 }
 
 .timeline-ruler::before {
@@ -281,13 +285,15 @@ body {
 
 .timeline-playhead {
     position: absolute;
-    top: -2px;
+    left: 0;
+    top: 0;
     width: 2px;
-    height: 24px;
+    height: 100%;
     background: #dc3545;
     border-radius: 1px;
-    z-index: 10;
-    transition: left 0.1s ease;
+    z-index: 20;
+    cursor: grab;
+    transition: left 0.05s linear;
 }
 
 .timeline-track {
@@ -298,7 +304,7 @@ body {
 }
 
 .timeline-label {
-    width: 120px;
+    width: 140px;
     font-size: 0.85rem;
     font-weight: 500;
     color: #495057;
