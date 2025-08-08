@@ -343,7 +343,7 @@ class InferenceManager:
             for result in results:
                 if result.obb is None:
                     continue
-
+                
                 obb = result.obb
                 for i in range(len(obb.conf)):
                     cls = int(obb.cls[i])
@@ -545,7 +545,7 @@ class InferenceManager:
         # Create a dedicated directory for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
-
+        
         # Generate output paths within the new directory
         output_path = os.path.join(result_dir, 'output.mp4')
         stats_file = os.path.join(result_dir, 'stats.json')

@@ -17,8 +17,9 @@
     </nav>
 
     <div class="container mt-4">
-        <div class="row justify-content-center">
-            <div class="col-12 col-lg-10 col-xl-8">
+        <div class="row g-4">
+            <!-- Main content column (≈70%) -->
+            <div class="col-12 col-lg-8 col-xl-9">
                 <!-- Header with file info and action buttons -->
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
@@ -77,6 +78,36 @@
                     </div>
                 </div>
                 {% endif %}
+
+            </div>
+
+            <!-- Sidebar column (≈30%) -->
+            <div class="col-12 col-lg-4 col-xl-3">
+                {% if file_type == 'video' %}
+                <div id="detection-sidebar" class="card sidebar-card">
+                    <div class="card-header p-0">
+                        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="simple-tab" data-bs-toggle="tab" data-bs-target="#tab-simple" type="button" role="tab">Simple</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#tab-advanced" type="button" role="tab">Advanced</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="tab-simple" role="tabpanel" aria-labelledby="simple-tab">
+                                <div id="simple-detections" class="list-group list-group-flush small"></div>
+                            </div>
+                            <div class="tab-pane fade" id="tab-advanced" role="tabpanel" aria-labelledby="advanced-tab">
+                                <div class="text-muted small p-2">Coming soon</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
 
                 <!-- Quick stats summary -->
                 <div class="card mt-4">
@@ -255,6 +286,7 @@
                 timelineContent.classList.remove('d-none');
                 
                 setupTimelineInteraction();
+                initializeSidebar(timelineData, metadata);
             }
 
             function generateSegmentsFromFrames(logo, frames, metadata) {
@@ -400,12 +432,53 @@
                     playhead.style.left = `${leftPx}px`;
                 }
                 if (video) {
-                    video.addEventListener('timeupdate', updatePlayhead);
+                    video.addEventListener('timeupdate', () => {
+                        updatePlayhead();
+                        updateSidebarForCurrentFrame();
+                    });
                 }
 
                 layoutPlayhead();
                 window.addEventListener('resize', layoutPlayhead);
                 updatePlayhead();
+            }
+
+            // Sidebar logic
+            let frameToLogosIndex = {};
+            let lastRenderedFrame = -1;
+            function initializeSidebar(timelineData, metadata) {
+                // Build reverse frame index: frame -> [logos]
+                frameToLogosIndex = {};
+                Object.keys(timelineData).forEach(logo => {
+                    const frames = timelineData[logo] || [];
+                    frames.forEach(f => {
+                        if (!frameToLogosIndex[f]) frameToLogosIndex[f] = [];
+                        frameToLogosIndex[f].push(logo);
+                    });
+                });
+                // Initial render
+                updateSidebarForCurrentFrame();
+            }
+
+            function updateSidebarForCurrentFrame() {
+                const sidebar = document.getElementById('simple-detections');
+                if (!sidebar || !videoMetadata || !videoMetadata.fps) return;
+                const fps = videoMetadata.fps;
+                const frame = Math.floor((video?.currentTime || 0) * fps);
+                if (frame === lastRenderedFrame) return;
+                lastRenderedFrame = frame;
+
+                const logos = (frameToLogosIndex[frame] || []).slice().sort((a,b)=>a.localeCompare(b));
+                if (logos.length === 0) {
+                    sidebar.innerHTML = '<div class="list-group-item text-muted">No detections</div>';
+                    return;
+                }
+                sidebar.innerHTML = logos.map(name => `
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${name}</span>
+                        <span class="badge bg-secondary">${frame}</span>
+                    </div>
+                `).join('');
             }
             
             function createTooltip() {
