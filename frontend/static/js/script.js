@@ -3,6 +3,35 @@
 document.addEventListener('DOMContentLoaded', function() {
     // File upload preview
     const fileInput = document.getElementById('file');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileSection = document.getElementById('fileSection');
+    const urlSection = document.getElementById('urlSection');
+
+    const setUrlMode = (enabled) => {
+        if (processUrlBtn) processUrlBtn.disabled = !enabled;
+        if (urlInput) urlInput.disabled = !enabled;
+        if (urlSection) {
+            urlSection.classList.toggle('disabled', !enabled);
+        }
+    };
+
+    const setFileMode = (enabled) => {
+        if (fileInput) fileInput.disabled = !enabled;
+        if (uploadBtn) uploadBtn.disabled = !enabled;
+        if (fileSection) {
+            fileSection.classList.toggle('disabled', !enabled);
+        }
+    };
+
+    const resetModesIfEmpty = () => {
+        const urlEmpty = !urlInput || !urlInput.value || urlInput.value.trim() === '';
+        const fileEmpty = !fileInput || !fileInput.files || fileInput.files.length === 0;
+        if (urlEmpty && fileEmpty) {
+            setUrlMode(true);
+            setFileMode(true);
+        }
+    };
+
     if (fileInput) {
         fileInput.addEventListener('change', function() {
             const file = this.files[0];
@@ -23,6 +52,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.value = '';
                 return;
             }
+
+            // Disable URL mode when file selected
+            setUrlMode(false);
         });
     }
     
@@ -68,9 +100,13 @@ document.addEventListener('DOMContentLoaded', function() {
         urlInput.addEventListener('input', () => {
             if (urlInput.value && urlInput.value.startsWith('http')) {
                 fetchPreview();
+                // Disable file mode when URL typed
+                setFileMode(false);
             } else {
                 previewContainer.classList.add('d-none');
                 previewImg.src = '';
+                // Re-enable both if empty
+                resetModesIfEmpty();
             }
         });
     }
@@ -98,4 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(err => alert(`Failed to submit URL: ${err}`));
         });
     }
+
+    // If the page loads with both empty, ensure both modes enabled
+    resetModesIfEmpty();
 });
