@@ -51,19 +51,24 @@
 }
 
 .top-performer.rank-1 {
-    border-left-color: #ffab70;
-    background: linear-gradient(135deg, rgba(255, 171, 112, 0.1), #161b22);
+    border-left: 5px solid #FFD700; /* Gold */
+    background-color: #b8860b;      /* Darker gold for contrast */
+    color: white;
 }
 
 .top-performer.rank-2 {
-    border-left-color: #8b949e;
-    background: linear-gradient(135deg, rgba(139, 148, 158, 0.1), #161b22);
+    border-left: 5px solid #C0C0C0; /* Silver */
+    background-color: #708090;      /* Slate gray for contrast */
+    color: white;
 }
 
 .top-performer.rank-3 {
-    border-left-color: #fd8c73;
-    background: linear-gradient(135deg, rgba(253, 140, 115, 0.1), #161b22);
+    border-left: 5px solid #CD7F32; /* Bronze */
+    background-color: #8b4513;      /* SaddleBrown - darker bronze */
+    color: white;
 }
+
+
 
 .performer-rank {
     font-weight: bold;
@@ -81,7 +86,7 @@
 
 .performer-value {
     font-weight: bold;
-    color: #58a6ff;
+    color: #fbfbfb;
     font-family: 'JetBrains Mono', monospace;
 }
 

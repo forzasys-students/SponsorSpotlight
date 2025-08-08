@@ -55,8 +55,8 @@
                     <!-- Overview Tab -->
                     <div class="tab-pane fade show active" id="overview" role="tabpanel">
                         <!-- Key Metrics Cards -->
-                        <div class="row mb-4">
-                            <div class="col-md-3">
+                        <div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
+                            <div class="col">
                                 <div class="card stat-card">
                                     <div class="card-body text-center">
                                         <i class="bi bi-eye-fill stat-icon text-primary"></i>
@@ -65,7 +65,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col">
                                 <div class="card stat-card">
                                     <div class="card-body text-center">
                                         <i class="bi bi-award-fill stat-icon text-success"></i>
@@ -74,7 +74,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col">
                                 <div class="card stat-card">
                                     <div class="card-body text-center">
                                         <i class="bi bi-clock-fill stat-icon text-warning"></i>
@@ -83,7 +83,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col">
                                 <div class="card stat-card">
                                     <div class="card-body text-center">
                                         <i class="bi bi-trophy-fill stat-icon text-danger"></i>
@@ -92,6 +92,17 @@
                                     </div>
                                 </div>
                             </div>
+                             {% if file_type == 'video' %}
+                            <div class="col">
+                                 <div class="card stat-card">
+                                     <div class="card-body text-center">
+                                         <i class="bi bi-aspect-ratio-fill stat-icon text-info"></i>
+                                         <h3 id="top-coverage" class="stat-number">-</h3>
+                                         <p class="stat-label">Top Coverage (Overall)</p>
+                                     </div>
+                                 </div>
+                             </div>
+                             {% endif %}
                         </div>
 
                         <div class="row">
@@ -145,6 +156,8 @@
                                     <option value="time">Sort by Exposure Time</option>
                                     <option value="percentage">Sort by Percentage</option>
                                     <option value="frames">Sort by Frames</option>
+                                     <option value="coverage">Sort by Avg. Coverage</option>
+                                     <option value="max_coverage">Sort by Max Coverage</option>
                                     {% endif %}
                                     <option value="name">Sort by Name</option>
                                 </select>
@@ -173,8 +186,9 @@
                                                 <th>Time (s)</th>
                                                 <th>Percentage</th>
                                                 <th>Avg. per Frame</th>
+                                                 <th>Avg. Coverage (%)</th>
+                                                 <th>Max Coverage (%)</th>
                                                 {% endif %}
-                                                <th>Performance</th>
                                             </tr>
                                         </thead>
                                         <tbody id="detailedTableBody">

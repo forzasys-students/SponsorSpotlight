@@ -288,6 +288,8 @@ class InferenceManager:
         cap = cv2.VideoCapture(video_path)
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
         fps = cap.get(cv2.CAP_PROP_FPS)
+        width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         out = cv2.VideoWriter(output_path, fourcc, fps, 
                                  (int(cap.get(3)), int(cap.get(4))))
         
@@ -298,8 +300,19 @@ class InferenceManager:
         frame_count = 0
         
         # Initialize statistics tracking
-        aggregated_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0})
+        # sum_coverage_present accumulates per-frame coverage only for frames where the logo is present
+        # max_coverage tracks the maximum single-frame coverage observed
+        aggregated_stats = defaultdict(lambda: {
+            "frames": 0,
+            "time": 0.0,
+            "detections": 0,
+            "sum_coverage_present": 0.0,
+            "max_coverage": 0.0,
+            "sum_area_present_px": 0.0
+        })
         frame_by_frame_detections = defaultdict(list)
+        # Per-frame coverage series: percentage per frame for each logo (0 when absent)
+        coverage_per_frame = defaultdict(list)
         
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
@@ -320,16 +333,41 @@ class InferenceManager:
             
             logos_in_frame = Counter()
             main_logos_in_frame = set()
+            # Accumulate pixel area for each main logo detected in this frame
+            logo_area_pixels_in_frame = defaultdict(float)
 
-            # Count logo detections in the frame
+            # Count logo detections in the frame and compute coverage areas
             for result in results:
                 if result.obb is None:
                     continue
-                
-                for i in range(len(result.obb.conf)):
-                    cls = int(result.obb.cls[i])
+
+                obb = result.obb
+                for i in range(len(obb.conf)):
+                    cls = int(obb.cls[i])
                     class_name = self.class_names[cls]
                     logos_in_frame[class_name] += 1
+
+                    # Compute oriented bounding box area in pixels
+                    if hasattr(obb, 'xyxyxyxy'):
+                        polygon = obb.xyxyxyxy[i]
+                        if hasattr(polygon, 'cpu'):
+                            polygon = polygon.cpu().numpy()
+                        points = polygon.reshape(4, 2).astype(np.float32)
+
+                        # Scale normalized coordinates to pixel coordinates if needed
+                        is_normalized = np.all(points <= 1.0)
+                        if is_normalized:
+                            points[:, 0] *= frame.shape[1]
+                            points[:, 1] *= frame.shape[0]
+
+                        # Clamp to frame bounds just in case
+                        points[:, 0] = np.clip(points[:, 0], 0, frame.shape[1])
+                        points[:, 1] = np.clip(points[:, 1], 0, frame.shape[0])
+
+                        area_px = float(cv2.contourArea(points)) if points.shape == (4, 2) else 0.0
+                        if area_px > 0:
+                            main_logo_for_area = self.logo_groups.get(class_name, class_name)
+                            logo_area_pixels_in_frame[main_logo_for_area] += area_px
 
             # Aggregate stats for the current frame
             for logo, count in logos_in_frame.items():
@@ -338,10 +376,43 @@ class InferenceManager:
                 main_logos_in_frame.add(main_logo)
             
             # Update frame-based stats for unique main logos in the frame
+            # Update frame/time counts and coverage-based metrics for logos present in this frame
+            frame_area = float(frame.shape[0] * frame.shape[1]) if frame is not None else 0.0
+            # Prepare to record per-frame coverage series
+            present_logos_this_frame = set()
             for main_logo in main_logos_in_frame:
                 aggregated_stats[main_logo]["frames"] += 1
                 aggregated_stats[main_logo]["time"] += frame_time
                 frame_by_frame_detections[main_logo].append(frame_count)
+
+                # Compute coverage ratio for this main logo in the frame (sum of all instances, capped at 1.0)
+                if frame_area > 0:
+                    logo_area = logo_area_pixels_in_frame.get(main_logo, 0.0)
+                    coverage_ratio = min(1.0, logo_area / frame_area)
+                    aggregated_stats[main_logo]["sum_coverage_present"] += coverage_ratio
+                    aggregated_stats[main_logo]["sum_area_present_px"] += logo_area
+                    if coverage_ratio > aggregated_stats[main_logo]["max_coverage"]:
+                        aggregated_stats[main_logo]["max_coverage"] = coverage_ratio
+                    # Ensure backfill for new logos
+                    while len(coverage_per_frame[main_logo]) < (frame_count - 1):
+                        coverage_per_frame[main_logo].append(0.0)
+                    coverage_per_frame[main_logo].append(round(coverage_ratio * 100.0, 4))
+                    present_logos_this_frame.add(main_logo)
+
+            # For logos not present in this frame, append 0 to keep series aligned
+            for lg in list(coverage_per_frame.keys()):
+                if lg not in present_logos_this_frame:
+                    while len(coverage_per_frame[lg]) < (frame_count - 1):
+                        coverage_per_frame[lg].append(0.0)
+                    coverage_per_frame[lg].append(0.0)
+
+            # Periodic debug logging per 25 frames
+            if frame_count % 25 == 0 and frame_area > 0 and logo_area_pixels_in_frame:
+                debug_msg_parts = [f"Frame {frame_count} coverage:"]
+                for lg, area_px in logo_area_pixels_in_frame.items():
+                    cov_pct = (area_px / frame_area) * 100.0
+                    debug_msg_parts.append(f"{lg}={cov_pct:.3f}% ({int(area_px)}px of {int(frame_area)}px)")
+                print(" | ".join(debug_msg_parts))
 
             # Annotate and write the frame
             annotated_frame = self._annotate_frame(frame, results)
@@ -367,20 +438,36 @@ class InferenceManager:
             "Aggregating statistics"
         )
         
-        # Calculate percentages and round values
+        # Calculate percentages and coverage metrics, then round values
         final_stats = {}
         for logo, stats in aggregated_stats.items():
             time_value = round(stats["time"], 2)
-            stats["time"] = min(time_value, total_video_time)
-            stats["percentage"] = round((stats["time"] / total_video_time * 100) if total_video_time > 0 else 0, 2)
-            final_stats[logo] = stats
+            frames_present = stats["frames"]
+            sum_cov_present = stats.get("sum_coverage_present", 0.0)
+            max_cov = stats.get("max_coverage", 0.0)
+
+            percentage_time = (time_value / total_video_time * 100) if total_video_time > 0 else 0
+            avg_cov_present = (sum_cov_present / frames_present * 100) if frames_present > 0 else 0.0
+            avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
+
+            final_stats[logo] = {
+                "frames": frames_present,
+                "time": min(time_value, total_video_time),
+                "detections": stats["detections"],
+                "percentage": round(percentage_time, 2),
+                "coverage_avg_present": round(avg_cov_present, 2),
+                "coverage_avg_overall": round(avg_cov_overall, 2),
+                "coverage_max": round(max_cov * 100, 2)
+            }
 
         # Prepare final JSON output with metadata
         output_data = {
             "video_metadata": {
                 "duration": round(total_video_time, 2),
                 "fps": round(fps, 2),
-                "total_frames": total_frames
+                "total_frames": total_frames,
+                "width": width_cap,
+                "height": height_cap
             },
             "logo_stats": final_stats
         }
@@ -392,6 +479,51 @@ class InferenceManager:
         # Save frame-by-frame statistics
         with open(timeline_stats_file, "w") as f:
             json.dump(frame_by_frame_detections, f)
+
+        # Save coverage debug information for validation
+        try:
+            coverage_debug = {
+                "resolution": {
+                    "width": output_data["video_metadata"]["width"],
+                    "height": output_data["video_metadata"]["height"],
+                    "frame_area": output_data["video_metadata"]["width"] * output_data["video_metadata"]["height"]
+                },
+                "frames_total": total_frames,
+                "per_logo": {}
+            }
+            frame_area_dbg = float(coverage_debug["resolution"]["frame_area"]) if coverage_debug["resolution"]["frame_area"] else 0.0
+            for logo, stats in aggregated_stats.items():
+                frames_present = stats["frames"]
+                sum_area_px = stats.get("sum_area_present_px", 0.0)
+                sum_cov = stats.get("sum_coverage_present", 0.0)
+                max_cov = stats.get("max_coverage", 0.0)
+                coverage_debug["per_logo"][logo] = {
+                    "frames_present": frames_present,
+                    "sum_area_present_px": round(float(sum_area_px), 2),
+                    "avg_area_present_px": round(float(sum_area_px / frames_present), 2) if frames_present > 0 else 0.0,
+                    "avg_coverage_present_pct": round(float((sum_cov / frames_present) * 100.0), 3) if frames_present > 0 else 0.0,
+                    "avg_coverage_overall_pct": round(float((sum_cov / total_frames) * 100.0), 3) if total_frames > 0 else 0.0,
+                    "max_coverage_pct": round(float(max_cov * 100.0), 3),
+                    "frame_area_px": int(frame_area_dbg)
+                }
+            coverage_debug_file = os.path.join(result_dir, 'coverage_debug.json')
+            with open(coverage_debug_file, 'w') as f:
+                json.dump(coverage_debug, f, indent=2)
+
+            # Save per-frame coverage series (percentages per frame, 0 when absent)
+            for lg, series in coverage_per_frame.items():
+                # Backfill series to total_frames if needed
+                while len(series) < total_frames:
+                    series.append(0.0)
+            coverage_series = {
+                "frames_total": total_frames,
+                "per_logo": {lg: [round(float(v), 4) for v in series] for lg, series in coverage_per_frame.items()}
+            }
+            coverage_series_file = os.path.join(result_dir, 'coverage_per_frame.json')
+            with open(coverage_series_file, 'w') as f:
+                json.dump(coverage_series, f, indent=2)
+        except Exception as e:
+            print(f"Failed to write coverage_debug.json: {e}")
         
         # Update progress
         self.progress.update_progress(

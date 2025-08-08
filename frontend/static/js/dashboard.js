@@ -44,10 +44,26 @@ class Dashboard {
         
         let totalExposure = 0;
         let topLogo = '-';
+        let topCoverageLogo = '-';
+        let topCoverageValue = 0;
         
         if (this.fileType === 'video') {
             totalExposure = logos.reduce((sum, logo) => sum + (this.logoStats[logo].time || 0), 0);
             topLogo = logos.sort((a, b) => (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0))[0] || '-';
+
+            // Compute highest overall coverage (fallback to present coverage if overall not available)
+            const coverageScore = (logo) => {
+                const s = this.logoStats[logo] || {};
+                const overall = Number(s.coverage_avg_overall);
+                const present = Number(s.coverage_avg_present);
+                if (!isNaN(overall) && overall > 0) return overall;
+                if (!isNaN(present) && present > 0) return present;
+                return 0;
+            };
+            if (logos.length > 0) {
+                topCoverageLogo = logos.slice().sort((a, b) => coverageScore(b) - coverageScore(a))[0] || '-';
+                topCoverageValue = coverageScore(topCoverageLogo) || 0;
+            }
         } else {
             topLogo = logos.sort((a, b) => this.logoStats[b].detections - this.logoStats[a].detections)[0] || '-';
         }
@@ -58,6 +74,15 @@ class Dashboard {
             `${totalExposure.toFixed(1)}s` : 'N/A';
         document.getElementById('top-logo').textContent = topLogo.length > 15 ? 
             topLogo.substring(0, 15) + '...' : topLogo;
+
+        // Update Top Coverage card if present
+        const topCoverageEl = document.getElementById('top-coverage');
+        if (topCoverageEl && this.fileType === 'video') {
+            const safeName = (typeof topCoverageLogo === 'string' && topCoverageLogo.length) ? topCoverageLogo : '-';
+            const name = safeName.length > 15 ? safeName.substring(0, 15) + '...' : safeName;
+            const value = isNaN(topCoverageValue) ? 0 : topCoverageValue;
+            topCoverageEl.textContent = `${name} (${value.toFixed(2)}%)`;
+        }
     }
 
     renderTopPerformers() {
@@ -158,7 +183,6 @@ class Dashboard {
 
         tbody.innerHTML = logos.map(logo => {
             const logoData = this.logoStats[logo];
-            const performance = this.calculatePerformance(logoData);
             
             let row = `
                 <tr>
@@ -169,19 +193,20 @@ class Dashboard {
             if (this.fileType === 'video') {
                 const avgPerFrame = logoData.frames > 0 ? 
                     (logoData.detections / logoData.frames).toFixed(2) : '0.00';
+                const avgCoverage = (logoData.coverage_avg_present || 0).toFixed(2);
+                const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
                     <td>${(logoData.time || 0).toFixed(1)}</td>
                     <td>${(logoData.percentage || 0).toFixed(1)}%</td>
                     <td>${avgPerFrame}</td>
+                    <td>${avgCoverage}%</td>
+                    <td>${maxCoverage}%</td>
                 `;
             }
 
-            row += `
-                    <td><span class="badge performance-badge performance-${performance.class}">${performance.label}</span></td>
-                </tr>
-            `;
+            row += `</tr>`;
 
             return row;
         }).join('');
@@ -243,6 +268,12 @@ class Dashboard {
                         return isDesc ? (dataB.percentage || 0) - (dataA.percentage || 0) : (dataA.percentage || 0) - (dataB.percentage || 0);
                     case 'frames':
                         return isDesc ? (dataB.frames || 0) - (dataA.frames || 0) : (dataA.frames || 0) - (dataB.frames || 0);
+                    case 'coverage':
+                        return isDesc ? (dataB.coverage_avg_present || 0) - (dataA.coverage_avg_present || 0)
+                                      : (dataA.coverage_avg_present || 0) - (dataB.coverage_avg_present || 0);
+                    case 'max_coverage':
+                        return isDesc ? (dataB.coverage_max || 0) - (dataA.coverage_max || 0)
+                                      : (dataA.coverage_max || 0) - (dataB.coverage_max || 0);
                     default:
                         return 0;
                 }
@@ -261,7 +292,6 @@ class Dashboard {
         
         tbody.innerHTML = logos.map(logo => {
             const logoData = this.logoStats[logo];
-            const performance = this.calculatePerformance(logoData);
             
             let row = `
                 <tr>
@@ -272,19 +302,20 @@ class Dashboard {
             if (this.fileType === 'video') {
                 const avgPerFrame = logoData.frames > 0 ? 
                     (logoData.detections / logoData.frames).toFixed(2) : '0.00';
+                const avgCoverage = (logoData.coverage_avg_present || 0).toFixed(2);
+                const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
                     <td>${(logoData.time || 0).toFixed(1)}</td>
                     <td>${(logoData.percentage || 0).toFixed(1)}%</td>
                     <td>${avgPerFrame}</td>
+                    <td>${avgCoverage}%</td>
+                    <td>${maxCoverage}%</td>
                 `;
             }
 
-            row += `
-                    <td><span class="badge performance-badge performance-${performance.class}">${performance.label}</span></td>
-                </tr>
-            `;
+            row += `</tr>`;
 
             return row;
         }).join('');
