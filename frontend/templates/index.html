@@ -35,12 +35,24 @@
                         <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-4">
                             <div class="mb-3">
                                 <label for="file" class="form-label">Select File</label>
-                                <input type="file" class="form-control" id="file" name="file" accept="image/*,video/*" required>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*,video/*">
                                 <div class="form-text">Supported formats: JPG, PNG, GIF, MP4, AVI, MOV, WEBM</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="urlInput" class="form-label">Or paste a video/image URL (m3u8 supported)</label>
+                                <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/stream.m3u8">
+                                <div class="form-text">We’ll cache by URL to reuse past results.</div>
+                            </div>
+                            <div class="mb-3 d-none" id="previewContainer">
+                                <label class="form-label">Preview</label>
+                                <div class="text-center">
+                                    <img id="urlPreview" src="" alt="Preview" class="img-fluid rounded border" />
+                                </div>
                             </div>
                             
                             <div class="d-grid gap-2">
                                 <button type="submit" class="btn btn-primary">Upload & Process</button>
+                                <button type="button" id="processUrlBtn" class="btn btn-secondary">Process URL</button>
                             </div>
                         </form>
                     </div>

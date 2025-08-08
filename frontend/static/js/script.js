@@ -37,4 +37,65 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+    // URL preview and processing
+    const urlInput = document.getElementById('urlInput');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewImg = document.getElementById('urlPreview');
+    const processUrlBtn = document.getElementById('processUrlBtn');
+
+    const debounce = (fn, delay = 600) => {
+        let t;
+        return (...args) => {
+            clearTimeout(t);
+            t = setTimeout(() => fn(...args), delay);
+        };
+    };
+
+    const fetchPreview = debounce(() => {
+        if (!urlInput || !urlInput.value) return;
+        fetch(`/api/preview_frame?url=${encodeURIComponent(urlInput.value)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.image_data) {
+                    previewImg.src = data.image_data;
+                    previewContainer.classList.remove('d-none');
+                }
+            })
+            .catch(() => {});
+    }, 700);
+
+    if (urlInput) {
+        urlInput.addEventListener('input', () => {
+            if (urlInput.value && urlInput.value.startsWith('http')) {
+                fetchPreview();
+            } else {
+                previewContainer.classList.add('d-none');
+                previewImg.src = '';
+            }
+        });
+    }
+
+    if (processUrlBtn) {
+        processUrlBtn.addEventListener('click', () => {
+            const url = urlInput?.value?.trim();
+            if (!url) {
+                alert('Please paste a URL.');
+                return;
+            }
+            fetch('/upload_url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.redirect) {
+                    window.location.href = data.redirect;
+                } else if (data.error) {
+                    alert(data.error);
+                }
+            })
+            .catch(err => alert(`Failed to submit URL: ${err}`));
+        });
+    }
 });

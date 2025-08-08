@@ -5,6 +5,9 @@ import cv2
 import torch
 import numpy as np
 import json
+import subprocess
+import requests
+from urllib.parse import urljoin
 from collections import defaultdict, Counter
 import time
 from ultralytics import YOLO
@@ -536,24 +539,288 @@ class InferenceManager:
         return path.startswith('http://') or path.startswith('https://')
     
     def _process_video_stream(self, url, file_hash):
-        """Process a video stream for logo detection"""
-        # This would be similar to _process_video but adapted for streams
-        # For simplicity, we'll just call _process_video here
-        # For a real implementation, you would adapt the logic below
-        
+        """Process a video stream (e.g., m3u8) by piping frames via ffmpeg."""
+        # Resolve to highest-quality variant if this is a master HLS playlist
+        url = self._resolve_hls_highest_variant(url)
         # Create a dedicated directory for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
-        
+
         # Generate output paths within the new directory
         output_path = os.path.join(result_dir, 'output.mp4')
         stats_file = os.path.join(result_dir, 'stats.json')
-        
-        # The rest of the stream processing logic would go here...
-        # For now, we'll just log and finish
-        
-        # For this example, we'll just call the main video processor
-        self._process_video(url, file_hash)
+        timeline_stats_file = os.path.join(result_dir, 'timeline_stats.json')
+
+        # Probe stream
+        try:
+            probe = subprocess.run([
+                'ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height,r_frame_rate',
+                '-of', 'json', url
+            ], capture_output=True, text=True, timeout=10)
+            info = json.loads(probe.stdout or '{}')
+            width = int(info.get('streams', [{}])[0].get('width', 1280))
+            height = int(info.get('streams', [{}])[0].get('height', 720))
+            r_frame_rate = info.get('streams', [{}])[0].get('r_frame_rate', '25/1')
+            num, den = (r_frame_rate.split('/') + ['1'])[:2]
+            fps = float(num) / float(den) if float(den) != 0 else 25.0
+        except Exception:
+            width, height, fps = 1280, 720, 25.0
+
+        # Try to estimate total duration from media playlist if available (for better progress)
+        estimated_total_frames = None
+        try:
+            pl = requests.get(url, timeout=10).text
+            if '#EXTINF' in pl:
+                total_sec = 0.0
+                for line in pl.splitlines():
+                    line = line.strip()
+                    if line.startswith('#EXTINF:'):
+                        try:
+                            dur = float(line.split(':', 1)[1].split(',')[0])
+                            total_sec += dur
+                        except Exception:
+                            pass
+                if total_sec > 0 and fps > 0:
+                    estimated_total_frames = int(total_sec * fps)
+        except Exception:
+            pass
+
+        # Start ffmpeg pipe
+        ffmpeg_cmd = [
+            'ffmpeg', '-i', url, '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
+        ]
+        pipe = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**8)
+
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+        frame_time = 1 / fps
+        frame_count = 0
+
+        # Stats with coverage fields (mirror file video processing)
+        aggregated_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "sum_coverage_present": 0.0, "max_coverage": 0.0, "sum_area_present_px": 0.0})
+        frame_by_frame_detections = defaultdict(list)
+        coverage_per_frame = defaultdict(list)
+
+        self.progress.update_progress(
+            ProgressStage.INFERENCE_PROGRESS,
+            "Processing stream",
+            frame=frame_count,
+            total_frames=estimated_total_frames,
+            progress_percentage=0
+        )
+
+        while True:
+            raw = pipe.stdout.read(width * height * 3)
+            if not raw:
+                break
+            frame = np.frombuffer(raw, dtype='uint8').reshape((height, width, 3))
+            frame_count += 1
+
+            results = self.model(frame)
+
+            logos_in_frame = Counter()
+            main_logos_in_frame = set()
+            logo_area_pixels_in_frame = defaultdict(float)
+
+            for result in results:
+                if result.obb is None:
+                    continue
+                obb = result.obb
+                for i in range(len(obb.conf)):
+                    cls = int(obb.cls[i])
+                    class_name = self.class_names[cls]
+                    logos_in_frame[class_name] += 1
+                    if hasattr(obb, 'xyxyxyxy'):
+                        polygon = obb.xyxyxyxy[i]
+                        if hasattr(polygon, 'cpu'):
+                            polygon = polygon.cpu().numpy()
+                        points = polygon.reshape(4, 2).astype(np.float32)
+                        is_normalized = np.all(points <= 1.0)
+                        if is_normalized:
+                            points[:, 0] *= frame.shape[1]
+                            points[:, 1] *= frame.shape[0]
+                        points[:, 0] = np.clip(points[:, 0], 0, frame.shape[1])
+                        points[:, 1] = np.clip(points[:, 1], 0, frame.shape[0])
+                        area_px = float(cv2.contourArea(points)) if points.shape == (4, 2) else 0.0
+                        if area_px > 0:
+                            main_logo_for_area = self.logo_groups.get(class_name, class_name)
+                            logo_area_pixels_in_frame[main_logo_for_area] += area_px
+
+            for logo, count in logos_in_frame.items():
+                main_logo = self.logo_groups.get(logo, logo)
+                aggregated_stats[main_logo]["detections"] += count
+                main_logos_in_frame.add(main_logo)
+
+            frame_area = float(frame.shape[0] * frame.shape[1]) if frame is not None else 0.0
+            present_logos_this_frame = set()
+            for main_logo in main_logos_in_frame:
+                aggregated_stats[main_logo]["frames"] += 1
+                aggregated_stats[main_logo]["time"] += frame_time
+                frame_by_frame_detections[main_logo].append(frame_count)
+                if frame_area > 0:
+                    logo_area = logo_area_pixels_in_frame.get(main_logo, 0.0)
+                    coverage_ratio = min(1.0, logo_area / frame_area)
+                    aggregated_stats[main_logo]["sum_coverage_present"] += coverage_ratio
+                    aggregated_stats[main_logo]["sum_area_present_px"] += logo_area
+                    if coverage_ratio > aggregated_stats[main_logo]["max_coverage"]:
+                        aggregated_stats[main_logo]["max_coverage"] = coverage_ratio
+                    while len(coverage_per_frame[main_logo]) < (frame_count - 1):
+                        coverage_per_frame[main_logo].append(0.0)
+                    coverage_per_frame[main_logo].append(round(coverage_ratio * 100.0, 4))
+                    present_logos_this_frame.add(main_logo)
+
+            for lg in list(coverage_per_frame.keys()):
+                if lg not in present_logos_this_frame:
+                    while len(coverage_per_frame[lg]) < (frame_count - 1):
+                        coverage_per_frame[lg].append(0.0)
+                    coverage_per_frame[lg].append(0.0)
+
+            annotated_frame = self._annotate_frame(frame, results)
+            out.write(annotated_frame)
+
+            progress_pct = 0
+            self.progress.update_progress(
+                ProgressStage.INFERENCE_PROGRESS,
+                f"Processing frame {frame_count}",
+                frame=frame_count,
+                total_frames=estimated_total_frames,
+                progress_percentage=progress_pct
+            )
+
+        pipe.stdout.close()
+        pipe.wait()
+        out.release()
+
+        total_frames = frame_count
+        total_video_time = total_frames * frame_time
+
+        self.progress.update_progress(
+            ProgressStage.POST_PROCESSING,
+            "Aggregating statistics"
+        )
+
+        final_stats = {}
+        for logo, stats in aggregated_stats.items():
+            time_value = round(stats["time"], 2)
+            frames_present = stats["frames"]
+            sum_cov_present = stats.get("sum_coverage_present", 0.0)
+            max_cov = stats.get("max_coverage", 0.0)
+            percentage_time = (time_value / total_video_time * 100) if total_video_time > 0 else 0
+            avg_cov_present = (sum_cov_present / frames_present * 100) if frames_present > 0 else 0.0
+            avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
+            final_stats[logo] = {
+                "frames": frames_present,
+                "time": min(time_value, total_video_time),
+                "detections": stats["detections"],
+                "percentage": round(percentage_time, 2),
+                "coverage_avg_present": round(avg_cov_present, 2),
+                "coverage_avg_overall": round(avg_cov_overall, 2),
+                "coverage_max": round(max_cov * 100, 2)
+            }
+
+        output_data = {
+            "video_metadata": {
+                "duration": round(total_video_time, 2),
+                "fps": round(fps, 2),
+                "total_frames": total_frames,
+                "width": width,
+                "height": height
+            },
+            "logo_stats": final_stats
+        }
+
+        with open(stats_file, "w") as f:
+            json.dump(output_data, f, indent=4)
+
+        with open(timeline_stats_file, "w") as f:
+            json.dump(frame_by_frame_detections, f)
+
+        # Write coverage debug artifacts
+        try:
+            coverage_debug = {"resolution": {"width": width, "height": height, "frame_area": width * height}, "frames_total": total_frames, "per_logo": {}}
+            frame_area_dbg = float(width * height)
+            for logo, stats in aggregated_stats.items():
+                frames_present = stats["frames"]
+                sum_area_px = stats.get("sum_area_present_px", 0.0)
+                sum_cov = stats.get("sum_coverage_present", 0.0)
+                max_cov = stats.get("max_coverage", 0.0)
+                coverage_debug["per_logo"][logo] = {
+                    "frames_present": frames_present,
+                    "sum_area_present_px": round(float(sum_area_px), 2),
+                    "avg_area_present_px": round(float(sum_area_px / frames_present), 2) if frames_present > 0 else 0.0,
+                    "avg_coverage_present_pct": round(float((sum_cov / frames_present) * 100.0), 3) if frames_present > 0 else 0.0,
+                    "avg_coverage_overall_pct": round(float((sum_cov / total_frames) * 100.0), 3) if total_frames > 0 else 0.0,
+                    "max_coverage_pct": round(float(max_cov * 100.0), 3),
+                    "frame_area_px": int(frame_area_dbg)
+                }
+            with open(os.path.join(result_dir, 'coverage_debug.json'), 'w') as f:
+                json.dump(coverage_debug, f, indent=2)
+            for lg, series in coverage_per_frame.items():
+                while len(series) < total_frames:
+                    series.append(0.0)
+            coverage_series = {"frames_total": total_frames, "per_logo": {lg: [round(float(v), 4) for v in series] for lg, series in coverage_per_frame.items()}}
+            with open(os.path.join(result_dir, 'coverage_per_frame.json'), 'w') as f:
+                json.dump(coverage_series, f, indent=2)
+        except Exception as e:
+            print(f"Failed to write coverage debug (stream): {e}")
+
+        self.progress.update_progress(
+            ProgressStage.COMPLETE,
+            "Processing complete"
+        )
+
+    def _resolve_hls_highest_variant(self, url: str) -> str:
+        """If URL is a master m3u8, select the highest-resolution (or bandwidth) variant."""
+        try:
+            resp = requests.get(url, timeout=10)
+            text = resp.text
+            if '#EXT-X-STREAM-INF' not in text:
+                return url  # likely already a media playlist
+
+            best_uri = None
+            best_pixels = -1
+            best_bw = -1
+            lines = text.splitlines()
+            for i, line in enumerate(lines):
+                if line.startswith('#EXT-X-STREAM-INF'):
+                    attrs = line.split(':', 1)[1] if ':' in line else ''
+                    bandwidth = -1
+                    width = height = -1
+                    for part in attrs.split(','):
+                        if 'BANDWIDTH' in part:
+                            try:
+                                bandwidth = int(part.split('=')[1])
+                            except Exception:
+                                pass
+                        if 'RESOLUTION' in part:
+                            try:
+                                res = part.split('=')[1]
+                                w, h = res.lower().split('x')
+                                width, height = int(w), int(h)
+                            except Exception:
+                                pass
+                    # Next non-comment line should be the URI
+                    j = i + 1
+                    while j < len(lines) and lines[j].startswith('#'):
+                        j += 1
+                    if j < len(lines):
+                        uri = lines[j].strip()
+                        candidate = urljoin(url, uri)
+                        pixels = (width * height) if width > 0 and height > 0 else -1
+                        better = False
+                        if pixels > best_pixels:
+                            better = True
+                        elif pixels == -1 and best_pixels == -1 and bandwidth > best_bw:
+                            better = True
+                        if better:
+                            best_pixels = pixels
+                            best_bw = bandwidth
+                            best_uri = candidate
+            return best_uri or url
+        except Exception:
+            return url
     
     def _aggregate_stats(self, logo_stats):
         """Aggregate logo statistics"""

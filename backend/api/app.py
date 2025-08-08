@@ -10,6 +10,8 @@ from backend.core.inference_manager import InferenceManager
 from backend.utils.progress_manager import ProgressManager
 from backend.utils.agent_task_manager import AgentTaskManager
 import threading
+import base64
+import subprocess
 
 # Get absolute paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,9 +57,71 @@ def get_file_hash(file_path):
         file_hash = hashlib.md5(f.read()).hexdigest()
     return file_hash
 
+def get_url_hash(url: str) -> str:
+    """Generate a stable hash for a URL to use as a cache key"""
+    return hashlib.md5(url.strip().encode('utf-8')).hexdigest()
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/upload_url', methods=['POST'])
+def upload_url():
+    data = request.get_json(silent=True) or {}
+    url = data.get('url') or request.form.get('url')
+    if not url:
+        return jsonify({'error': 'No URL provided'}), 400
+
+    file_hash = get_url_hash(url)
+    file_type = 'video'
+    original_name = url.split('/')[-1] or 'remote_stream'
+
+    # If results already exist, reuse them
+    result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
+    output_path = os.path.join(result_dir, 'output.mp4')
+    stats_path = os.path.join(result_dir, 'stats.json')
+    if os.path.exists(output_path) and os.path.exists(stats_path):
+        session['file_info'] = {
+            'path': url,
+            'type': file_type,
+            'hash': file_hash,
+            'original_name': original_name
+        }
+        return jsonify({'redirect': url_for('show_results', file_hash=file_hash)})
+
+    # Otherwise, set session and start processing
+    session['file_info'] = {
+        'path': url,
+        'type': file_type,
+        'hash': file_hash,
+        'original_name': original_name
+    }
+    return jsonify({'redirect': url_for('process_file')})
+
+@app.route('/api/preview_frame')
+def preview_frame():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({'error': 'No URL provided'}), 400
+
+    # Use ffmpeg to extract a single frame into memory
+    try:
+        # Grab the first keyframe quickly; -vframes 1 equivalent via -frames:v
+        cmd = [
+            'ffmpeg', '-y', '-i', url,
+            '-frames:v', '1',
+            '-q:v', '2',
+            '-f', 'image2pipe', '-vcodec', 'mjpeg', '-'
+        ]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        img_bytes, err = proc.communicate(timeout=20)
+        if proc.returncode != 0 or not img_bytes:
+            return jsonify({'error': 'Failed to extract frame', 'details': err.decode('utf-8')[-500:]}), 500
+        b64 = base64.b64encode(img_bytes).decode('utf-8')
+        data_url = f'data:image/jpeg;base64,{b64}'
+        return jsonify({'image_data': data_url})
+    except Exception as e:
+        return jsonify({'error': f'Preview failed: {str(e)}'}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():

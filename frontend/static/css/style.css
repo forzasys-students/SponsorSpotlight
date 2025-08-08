@@ -536,4 +536,9 @@ footer {
     margin-top: 50px;
     background-color: #161b22 !important;
     border-top: 1px solid #30363d;
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
 }
