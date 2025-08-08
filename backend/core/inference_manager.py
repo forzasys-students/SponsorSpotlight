@@ -284,6 +284,7 @@ class InferenceManager:
         
         # Generate output paths within the new directory
         output_path = os.path.join(result_dir, 'output.mp4')
+        raw_path = os.path.join(result_dir, 'raw.mp4')
         stats_file = os.path.join(result_dir, 'stats.json')
         timeline_stats_file = os.path.join(result_dir, 'timeline_stats.json')
         
@@ -293,8 +294,8 @@ class InferenceManager:
         fps = cap.get(cv2.CAP_PROP_FPS)
         width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        out = cv2.VideoWriter(output_path, fourcc, fps, 
-                                 (int(cap.get(3)), int(cap.get(4))))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width_cap, height_cap))
+        raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width_cap, height_cap))
         
         # Get video properties
         frame_time = 1 / fps if fps > 0 else 0
@@ -325,6 +326,10 @@ class InferenceManager:
             progress_percentage=0
         )
         
+        # Prepare per-frame detections JSONL writer
+        detections_jsonl_path = os.path.join(result_dir, 'frame_detections.jsonl')
+        detections_writer = open(detections_jsonl_path, 'w')
+        
         # Process each frame
         while cap.isOpened():
             ret, frame = cap.read()
@@ -340,6 +345,7 @@ class InferenceManager:
             logo_area_pixels_in_frame = defaultdict(float)
 
             # Count logo detections in the frame and compute coverage areas
+            per_frame_detections = []
             for result in results:
                 if result.obb is None:
                     continue
@@ -371,6 +377,17 @@ class InferenceManager:
                         if area_px > 0:
                             main_logo_for_area = self.logo_groups.get(class_name, class_name)
                             logo_area_pixels_in_frame[main_logo_for_area] += area_px
+
+                        # Collect detection polygon/bbox for advanced overlays
+                        polygon_list = points.tolist()
+                        xs = [p[0] for p in polygon_list]
+                        ys = [p[1] for p in polygon_list]
+                        bbox = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+                        per_frame_detections.append({
+                            "class": self.logo_groups.get(class_name, class_name),
+                            "polygon": polygon_list,
+                            "bbox": bbox
+                        })
 
             # Aggregate stats for the current frame
             for logo, count in logos_in_frame.items():
@@ -417,7 +434,18 @@ class InferenceManager:
                     debug_msg_parts.append(f"{lg}={cov_pct:.3f}% ({int(area_px)}px of {int(frame_area)}px)")
                 print(" | ".join(debug_msg_parts))
 
-            # Annotate and write the frame
+            # Write per-frame detections line (time in seconds)
+            try:
+                detections_writer.write(json.dumps({
+                    "frame": frame_count,
+                    "time": round(frame_count * frame_time, 3),
+                    "detections": per_frame_detections
+                }) + "\n")
+            except Exception:
+                pass
+
+            # Write raw frame then annotated frame
+            raw_out.write(frame)
             annotated_frame = self._annotate_frame(frame, results)
             out.write(annotated_frame)
             
@@ -434,6 +462,11 @@ class InferenceManager:
         # Clean up
         cap.release()
         out.release()
+        raw_out.release()
+        try:
+            detections_writer.close()
+        except Exception:
+            pass
         
         # Finalize statistics
         self.progress.update_progress(
@@ -548,6 +581,7 @@ class InferenceManager:
         
         # Generate output paths within the new directory
         output_path = os.path.join(result_dir, 'output.mp4')
+        raw_path = os.path.join(result_dir, 'raw.mp4')
         stats_file = os.path.join(result_dir, 'stats.json')
         timeline_stats_file = os.path.join(result_dir, 'timeline_stats.json')
 
@@ -594,6 +628,7 @@ class InferenceManager:
 
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width, height))
 
         frame_time = 1 / fps
         frame_count = 0
@@ -611,6 +646,13 @@ class InferenceManager:
             progress_percentage=0
         )
 
+        # Prepare per-frame detections JSONL
+        detections_jsonl_path = os.path.join(result_dir, 'frame_detections.jsonl')
+        try:
+            detections_writer = open(detections_jsonl_path, 'w')
+        except Exception:
+            detections_writer = None
+
         while True:
             raw = pipe.stdout.read(width * height * 3)
             if not raw:
@@ -623,6 +665,7 @@ class InferenceManager:
             logos_in_frame = Counter()
             main_logos_in_frame = set()
             logo_area_pixels_in_frame = defaultdict(float)
+            per_frame_detections = []
 
             for result in results:
                 if result.obb is None:
@@ -647,6 +690,19 @@ class InferenceManager:
                         if area_px > 0:
                             main_logo_for_area = self.logo_groups.get(class_name, class_name)
                             logo_area_pixels_in_frame[main_logo_for_area] += area_px
+                        # Collect polygon/bbox for overlays
+                        try:
+                            poly_list = points.tolist()
+                            xs = [p[0] for p in poly_list]
+                            ys = [p[1] for p in poly_list]
+                            bbox = [float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))]
+                            per_frame_detections.append({
+                                "class": self.logo_groups.get(class_name, class_name),
+                                "polygon": poly_list,
+                                "bbox": bbox
+                            })
+                        except Exception:
+                            pass
 
             for logo, count in logos_in_frame.items():
                 main_logo = self.logo_groups.get(logo, logo)
@@ -677,6 +733,19 @@ class InferenceManager:
                         coverage_per_frame[lg].append(0.0)
                     coverage_per_frame[lg].append(0.0)
 
+            # Write raw frame and annotated frame
+            raw_out.write(frame)
+            # Write per-frame detections JSONL
+            if detections_writer is not None:
+                try:
+                    detections_writer.write(json.dumps({
+                        "frame": frame_count,
+                        "time": round(frame_count * frame_time, 3),
+                        "detections": per_frame_detections
+                    }) + "\n")
+                except Exception:
+                    pass
+
             annotated_frame = self._annotate_frame(frame, results)
             out.write(annotated_frame)
 
@@ -699,6 +768,12 @@ class InferenceManager:
         pipe.stdout.close()
         pipe.wait()
         out.release()
+        raw_out.release()
+        try:
+            if detections_writer is not None:
+                detections_writer.close()
+        except Exception:
+            pass
 
         total_frames = frame_count
         total_video_time = total_frames * frame_time
