@@ -244,7 +244,10 @@
                 }
             }
             
+            let globalTimelineData = {};
+            let advancedRendered = false;
             function generateAccurateTimeline(timelineData, metadata) {
+                globalTimelineData = timelineData || {};
                 const timelineContent = document.getElementById('timeline-content');
                 const timelineLoading = document.getElementById('timeline-loading');
 
@@ -441,6 +444,16 @@
                 layoutPlayhead();
                 window.addEventListener('resize', layoutPlayhead);
                 updatePlayhead();
+                // Lazy render Advanced tab when user activates it
+                const advTab = document.getElementById('advanced-tab');
+                if (advTab) {
+                    advTab.addEventListener('shown.bs.tab', () => {
+                        if (!advancedRendered) {
+                            renderAdvancedTab();
+                            advancedRendered = true;
+                        }
+                    });
+                }
             }
 
             // Sidebar logic
@@ -478,6 +491,36 @@
                         <span>${name}</span>
                     </div>
                 `).join('');
+            }
+
+            async function renderAdvancedTab() {
+                try {
+                    const payload = {
+                        video_metadata: videoMetadata || {},
+                        logo_stats: logoStats || {},
+                        timeline_stats: globalTimelineData || {}
+                    };
+                    // Try optional coverage debug artifacts if present
+                    const base = `/static/results/${fileHash}`;
+                    const safeFetch = async (path) => {
+                        try { const r = await fetch(path); if (r.ok) return await r.json(); } catch(_) {}
+                        return undefined;
+                    };
+                    const covDebug = await safeFetch(`${base}/coverage_debug.json`);
+                    const covPerFrame = await safeFetch(`${base}/coverage_per_frame.json`);
+                    if (covDebug) payload.coverage_debug = covDebug;
+                    if (covPerFrame) payload.coverage_per_frame = covPerFrame;
+
+                    const container = document.getElementById('tab-advanced');
+                    container.innerHTML = '';
+                    const pre = document.createElement('pre');
+                    pre.className = 'json-view';
+                    pre.textContent = JSON.stringify(payload, null, 2);
+                    container.appendChild(pre);
+                } catch (e) {
+                    const container = document.getElementById('tab-advanced');
+                    container.innerHTML = `<div class="alert alert-danger">Failed to load advanced JSON: ${e}</div>`;
+                }
             }
             
             function createTooltip() {
