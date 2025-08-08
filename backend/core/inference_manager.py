@@ -680,10 +680,17 @@ class InferenceManager:
             annotated_frame = self._annotate_frame(frame, results)
             out.write(annotated_frame)
 
-            progress_pct = 0
+            # Update progress percentage if we know estimated_total_frames
+            progress_pct = (frame_count / estimated_total_frames * 100) if estimated_total_frames else 0
+            # Clamp to [0, 100]
+            if progress_pct < 0:
+                progress_pct = 0
+            elif progress_pct > 100:
+                progress_pct = 100
+            msg_suffix = f" (~{round(progress_pct)}%)" if estimated_total_frames else ""
             self.progress.update_progress(
                 ProgressStage.INFERENCE_PROGRESS,
-                f"Processing frame {frame_count}",
+                f"Processing frame {frame_count}{msg_suffix}",
                 frame=frame_count,
                 total_frames=estimated_total_frames,
                 progress_percentage=progress_pct
