@@ -11,6 +11,7 @@ from backend.agent.tools.find_clip_tool import find_best_clip
 from backend.agent.tools.create_clip_tool import create_video_clip
 from backend.agent.tools.caption_tool import generate_share_caption
 from backend.agent.tools.share_tool import share_on_instagram
+from backend.agent.tools.metrics_tool import rank_brands
 from backend.agent.config import config_manager
 
 class AgentState(TypedDict):
@@ -27,6 +28,7 @@ class AgentGraph:
             create_video_clip,
             generate_share_caption,
             share_on_instagram,
+            rank_brands,
         ]
         self.tool_map = {tool.name: tool for tool in self.tools}
         
@@ -77,6 +79,10 @@ class AgentGraph:
             "- For 'create a N-second video with BRAND' requests: (1) find_best_clip for BRAND, (2) create_video_clip with end_time = start_time + N.",
             "- If duration is not provided, default to 10 seconds.",
             "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
+            "- For ranking questions (exposure percentage, detections, frames, time, coverage variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",
+            "- For ambiguous 'coverage' metric, default to 'coverage_avg_present' and note the choice in your response.",
+            "- When rank_brands returns structured JSON, present a concise, readable list (do not hallucinate additional brands).",
+            "- Also include the raw JSON on a separate line prefixed exactly with 'RANK_JSON: ' so the UI can render a table (e.g., RANK_JSON: { ... }).",
         ]
         if available_brands:
             guidance_lines.append(f"Available brands in this video: {', '.join(available_brands[:100])}")

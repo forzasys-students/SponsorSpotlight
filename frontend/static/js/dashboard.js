@@ -665,6 +665,16 @@ class Dashboard {
         if (refreshSuggestionsBtn) {
             refreshSuggestionsBtn.addEventListener('click', renderSuggestions);
         }
+
+        // Quick action: create clip from rank table
+        document.addEventListener('click', (e) => {
+            const btn = e.target?.closest('[data-action="suggest-clip"]');
+            if (!btn) return;
+            const brand = btn.getAttribute('data-brand');
+            if (!brand) return;
+            queryInput.value = `Create a 5-second clip with ${brand}`;
+            queryButton.click();
+        });
     }
 
     renderAgentResponseUI(markdown, responseEl, videoContainer) {
@@ -676,9 +686,17 @@ class Dashboard {
             const lines = markdown.split(/\n+/);
             cleanedMarkdown = lines.filter(l => !l.includes('.mp4')).join('\n');
         }
-        const contentHtml = this.simpleMarkdownToHtml(cleanedMarkdown || '');
+        // Detect embedded RANK_JSON for structured rendering (tolerant to single quotes)
+        const rankJson = this.parseRankJson(cleanedMarkdown);
+        // Remove the RANK_JSON line from prose before rendering markdown
+        const proseWithoutRank = cleanedMarkdown
+            .split(/\n+/)
+            .filter(line => !/^\s*RANK_JSON:\s*/.test(line))
+            .join('\n');
+        const contentHtml = this.simpleMarkdownToHtml(proseWithoutRank || '');
 
         if (url) {
+            const rankTableHtml = rankJson ? this.renderRankTable(rankJson) : '';
             responseEl.innerHTML = `
                 <div class="agent-result-card card">
                     <div class="card-header d-flex align-items-center justify-content-between">
@@ -692,12 +710,14 @@ class Dashboard {
                     </div>
                     <div class="card-body">
                         <div class="text-muted small mb-2">${contentHtml}</div>
+                        ${rankTableHtml}
                         <code class="small text-secondary">${url}</code>
                     </div>
                 </div>
             `;
             this.renderInlineVideoIfAny(url, videoContainer, true);
         } else {
+            const rankTableHtml = rankJson ? this.renderRankTable(rankJson) : '';
             responseEl.innerHTML = `
                 <div class="agent-result-card card">
                     <div class="card-header d-flex align-items-center">
@@ -706,6 +726,7 @@ class Dashboard {
                     </div>
                     <div class="card-body">
                         ${contentHtml}
+                        ${rankTableHtml}
                     </div>
                 </div>
             `;
@@ -716,9 +737,71 @@ class Dashboard {
         }
     }
 
+    parseRankJson(markdown) {
+        if (!markdown) return null;
+        const match = markdown.match(/RANK_JSON:\s*({[\s\S]*?})\s*$/m);
+        if (!match) return null;
+        const blob = match[1];
+        // Try strict JSON first
+        try { return JSON.parse(blob); } catch (_) {}
+        // Normalize single quotes and trailing commas then retry
+        try {
+            let normalized = blob.replace(/'/g, '"');
+            normalized = normalized.replace(/,(\s*[}\]])/g, '$1');
+            return JSON.parse(normalized);
+        } catch (_) {
+            return null;
+        }
+    }
+
+    renderRankTable(rankJson) {
+        const items = Array.isArray(rankJson.items) ? rankJson.items : [];
+        if (!items.length) return '';
+        const metric = rankJson.metric || '';
+        const dir = rankJson.direction || 'desc';
+        const header = `Top ${items.length} by ${metric} (${dir})`;
+        return `
+            <div class="table-responsive mt-2">
+                <table class="table table-sm align-middle mb-2">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Brand</th>
+                            <th>${metric}</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map((it, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>${it.brand}</td>
+                                <td>${it.formatted_value ?? it.value}</td>
+                                <td class="text-end">
+                                    ${this.fileType === 'video' ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-action="suggest-clip" data-brand="${it.brand}">Create 5s clip</button>` : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
     extractMp4Url(markdown) {
-        const match = markdown.match(/\(([^)]+\.mp4)\)/i) || markdown.match(/href=["']([^"']+\.mp4)["']/i);
-        return match && match[1] ? match[1] : null;
+        if (!markdown) return null;
+        // Common markdown and HTML link patterns
+        let m = markdown.match(/\(([^)]+\.mp4)\)/i) || markdown.match(/href=["']([^"']+\.mp4)["']/i);
+        if (m && m[1]) return m[1];
+        // Backticked code path `...mp4`
+        m = markdown.match(/`([^`]+\.mp4)`/i);
+        if (m && m[1]) return m[1];
+        // Direct static served path anywhere in the text
+        m = markdown.match(/(\/static\/results\/[\S]+?\.mp4)/i);
+        if (m && m[1]) return m[1];
+        // Fallback: any token ending with .mp4
+        m = markdown.match(/([\S]+?\.mp4)/i);
+        return m ? m[1] : null;
     }
 
     normalizeStaticUrl(rawUrl) {
