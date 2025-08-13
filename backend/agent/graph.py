@@ -10,6 +10,8 @@ from backend.agent.tools.analysis_tool import analyze_video
 from backend.agent.tools.find_clip_tool import find_best_clip
 from backend.agent.tools.create_clip_tool import create_video_clip
 from backend.agent.tools.create_brand_clip_tool import create_brand_specific_clip
+from backend.agent.tools.highlight_brand_montage_tool import create_brand_highlight_montage
+from backend.agent.tools.highlight_brand_montage_tool import create_brand_highlight_montage
 from backend.agent.tools.caption_tool import generate_share_caption
 from backend.agent.tools.share_tool import share_on_instagram
 from backend.agent.tools.metrics_tool import rank_brands
@@ -28,6 +30,7 @@ class AgentGraph:
             find_best_clip,
             create_video_clip,
             create_brand_specific_clip,
+            create_brand_highlight_montage,
             generate_share_caption,
             share_on_instagram,
             rank_brands,
@@ -80,6 +83,8 @@ class AgentGraph:
             "- If user specifies a duration in natural language (e.g., 'four seconds'), convert it to seconds.",
             "- For 'create a N-second video with BRAND' requests: (1) find_best_clip for BRAND, (2) prefer create_brand_specific_clip(brand_name, start_time, end_time, file_info) to annotate only that brand; fallback to create_video_clip if needed.",
             "- If duration is not provided, default to 10 seconds.",
+            "- For 'most exposure time' / 'highest coverage' requests for a BRAND: do NOT assume a fixed duration; call create_brand_highlight_montage(brand_name, file_info, desired_total_duration=30, segment_seconds=1.0).",
+            "- For 'most exposure' requests, AVOID find_best_clip/create_video_clip; the montage tool is the correct path. If available coverage is shorter than the target, shorter output is acceptable.",
             "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
             "- For ranking questions (exposure percentage, detections, frames, time, coverage variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",
             "- For ambiguous 'coverage' metric, default to 'coverage_avg_present' and note the choice in your response.",
@@ -93,6 +98,8 @@ class AgentGraph:
 
         messages_with_system = [SystemMessage(content=system_prompt)] + list(messages)
         response = self.model.invoke(messages_with_system)
+        # Hard nudge: if user asked for "most exposure" or "highest coverage", suggest montage tool explicitly
+        # This hint increases the chance the model selects create_brand_highlight_montage.
         return {"messages": [response]}
 
     def _execute_tools(self, state: AgentState) -> dict:

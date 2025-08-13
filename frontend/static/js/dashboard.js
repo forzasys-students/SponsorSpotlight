@@ -629,27 +629,58 @@ class Dashboard {
             return suggestions;
         };
 
-        const suggestionTemplates = () => ([
-            { icon: 'bi-robot', hint: 'AI analysis', text: 'Analyze the video and summarize key insights' },
-            { icon: 'bi-trophy', hint: 'Top performers', text: 'Which are the top 3 brands by exposure percentage?' },
-            { icon: 'bi-film', hint: 'Clip (10s)', text: `Find the best 10-second clip featuring ${Object.keys(this.logoStats)[0] || 'top brand'}` },
-            this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (5s)', text: `Create a 5-second clip with ${Object.keys(this.logoStats)[0] || 'top brand'}` } : null,
-            this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (4s)', text: `Create a 4-second clip with ${Object.keys(this.logoStats)[1] || 'another brand'}` } : null,
-            this.fileType === 'video' ? { icon: 'bi-hash', hint: 'Social caption', text: `Generate a caption to share a clip of ${Object.keys(this.logoStats)[2] || 'third brand'}` } : null,
-            { icon: 'bi-bar-chart', hint: 'Compare', text: `Compare ${(Object.keys(this.logoStats)[0] || 'Brand A')} vs ${(Object.keys(this.logoStats)[1] || 'Brand B')} exposure` },
-            { icon: 'bi-filter', hint: 'Low exposure', text: 'List brands with less than 1% exposure' },
+        const pickBrand = (idx, fallback) => {
+            const keys = Object.keys(this.logoStats);
+            return keys[idx] || fallback;
+        };
+
+        const suggestionGroups = () => ([
+            {
+                title: 'Analysis',
+                items: [
+                    { icon: 'bi-robot', hint: 'AI analysis', text: 'Analyze the video and summarize key insights' },
+                    { icon: 'bi-trophy', hint: 'Top performers', text: 'Which are the top 3 brands by exposure percentage?' },
+                    { icon: 'bi-bar-chart', hint: 'Compare', text: `Compare ${pickBrand(0,'Brand A')} vs ${pickBrand(1,'Brand B')} exposure` },
+                    { icon: 'bi-filter', hint: 'Low exposure', text: 'List brands with less than 1% exposure' },
+                ]
+            },
+            {
+                title: 'Video editor',
+                items: [
+                    { icon: 'bi-film', hint: 'Clip (10s)', text: `Find the best 10-second clip featuring ${pickBrand(0,'top brand')}` },
+                    this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (5s)', text: `Create a 5-second clip with ${pickBrand(0,'top brand')}` } : null,
+                    this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (4s)', text: `Create a 4-second clip with ${pickBrand(1,'another brand')}` } : null,
+                ].filter(Boolean)
+            },
+            this.fileType === 'video' ? {
+                title: 'Highlights',
+                items: [
+                    { icon: 'bi-lightning-charge', hint: 'Most exposure', text: `Find the most exposure time of ${pickBrand(0,'top brand')}, create a clip with duration of 3 seconds` },
+                ]
+            } : null,
+            this.fileType === 'video' ? {
+                title: 'Social',
+                items: [
+                    { icon: 'bi-hash', hint: 'Social caption', text: `Generate a caption to share a clip of ${pickBrand(2,'third brand')}` },
+                ]
+            } : null,
         ].filter(Boolean));
 
         const renderSuggestions = () => {
             if (!suggestionsContainer) return;
-            const items = suggestionTemplates();
-            suggestionsContainer.innerHTML = items.map(({ icon, hint, text }) => `
-                <div class="suggestion-item d-flex align-items-start">
-                    <div class="suggestion-icon me-2"><i class="bi ${icon}"></i></div>
-                    <div class="flex-grow-1">
-                        <div class="suggestion-title">${text}</div>
-                        <div class="suggestion-hint">${hint}</div>
-                    </div>
+            const groups = suggestionGroups();
+            suggestionsContainer.innerHTML = groups.map(g => `
+                <div class="suggestion-group">
+                    <div class="suggestion-group-title">${g.title}</div>
+                    ${g.items.map(({ icon, hint, text }) => `
+                        <div class="suggestion-item d-flex align-items-start">
+                            <div class="suggestion-icon me-2"><i class="bi ${icon}"></i></div>
+                            <div class="flex-grow-1">
+                                <div class="suggestion-title">${text}</div>
+                                <div class="suggestion-hint">${hint}</div>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             `).join('');
             Array.from(suggestionsContainer.querySelectorAll('.suggestion-item')).forEach(item => {

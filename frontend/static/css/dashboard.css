@@ -191,6 +191,18 @@
 	color: #6c757d;
 }
 
+.agent-suggestions .suggestion-group + .suggestion-group {
+	margin-top: 0.5rem;
+}
+
+.agent-suggestions .suggestion-group-title {
+	font-size: 0.8rem;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #6b7280;
+	padding: 0.4rem 0.75rem;
+}
+
 .agent-suggestions::-webkit-scrollbar {
 	width: 8px;
 }
