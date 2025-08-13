@@ -548,6 +548,9 @@ class Dashboard {
         const loadingSpinner = document.getElementById('agent-loading');
         const responseElement = document.getElementById('agent-response');
         const loadingText = loadingSpinner.querySelector('p');
+        const suggestionsContainer = document.getElementById('agent-suggestions');
+        const refreshSuggestionsBtn = document.getElementById('agent-refresh-suggestions');
+        const videoContainer = document.getElementById('agent-video-container');
 
         const pollTaskStatus = (taskId) => {
             const interval = setInterval(() => {
@@ -562,7 +565,7 @@ class Dashboard {
                             clearInterval(interval);
                             loadingSpinner.style.display = 'none';
                             responseElement.style.display = 'block';
-                            responseElement.innerHTML = this.simpleMarkdownToHtml(data.result);
+                            this.renderAgentResponseUI(data.result, responseElement, videoContainer);
                         }
                     })
                     .catch(error => {
@@ -597,7 +600,7 @@ class Dashboard {
                     // This was a sync task (like analysis)
                     loadingSpinner.style.display = 'none';
                     responseElement.style.display = 'block';
-                    responseElement.innerHTML = this.simpleMarkdownToHtml(data.response);
+                    this.renderAgentResponseUI(data.response, responseElement, videoContainer);
                 }
             })
             .catch(error => {
@@ -606,6 +609,172 @@ class Dashboard {
                 responseElement.innerHTML = `<div class="alert alert-danger">An error occurred: ${error}</div>`;
             });
         });
+
+        const baseSuggestions = () => {
+            const brands = Object.keys(this.logoStats).slice(0, 6);
+            const top = brands[0] || 'top brand';
+            const second = brands[1] || 'another brand';
+            const third = brands[2] || 'third brand';
+            const videoSpecific = this.fileType === 'video';
+            const suggestions = [
+                `Analyze the video and summarize key insights`,
+                `Which are the top 3 brands by exposure percentage?`,
+                `Find the best 10-second clip featuring ${top}`,
+                videoSpecific ? `Create a 5-second clip with ${top}` : null,
+                videoSpecific ? `Create a 4-second clip with ${second}` : null,
+                videoSpecific ? `Generate a caption to share a clip of ${third}` : null,
+                `Compare ${top} vs ${second} exposure`,
+                `List brands with less than 1% exposure`
+            ].filter(Boolean);
+            return suggestions;
+        };
+
+        const suggestionTemplates = () => ([
+            { icon: 'bi-robot', hint: 'AI analysis', text: 'Analyze the video and summarize key insights' },
+            { icon: 'bi-trophy', hint: 'Top performers', text: 'Which are the top 3 brands by exposure percentage?' },
+            { icon: 'bi-film', hint: 'Clip (10s)', text: `Find the best 10-second clip featuring ${Object.keys(this.logoStats)[0] || 'top brand'}` },
+            this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (5s)', text: `Create a 5-second clip with ${Object.keys(this.logoStats)[0] || 'top brand'}` } : null,
+            this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (4s)', text: `Create a 4-second clip with ${Object.keys(this.logoStats)[1] || 'another brand'}` } : null,
+            this.fileType === 'video' ? { icon: 'bi-hash', hint: 'Social caption', text: `Generate a caption to share a clip of ${Object.keys(this.logoStats)[2] || 'third brand'}` } : null,
+            { icon: 'bi-bar-chart', hint: 'Compare', text: `Compare ${(Object.keys(this.logoStats)[0] || 'Brand A')} vs ${(Object.keys(this.logoStats)[1] || 'Brand B')} exposure` },
+            { icon: 'bi-filter', hint: 'Low exposure', text: 'List brands with less than 1% exposure' },
+        ].filter(Boolean));
+
+        const renderSuggestions = () => {
+            if (!suggestionsContainer) return;
+            const items = suggestionTemplates();
+            suggestionsContainer.innerHTML = items.map(({ icon, hint, text }) => `
+                <div class="suggestion-item d-flex align-items-start">
+                    <div class="suggestion-icon me-2"><i class="bi ${icon}"></i></div>
+                    <div class="flex-grow-1">
+                        <div class="suggestion-title">${text}</div>
+                        <div class="suggestion-hint">${hint}</div>
+                    </div>
+                </div>
+            `).join('');
+            Array.from(suggestionsContainer.querySelectorAll('.suggestion-item')).forEach(item => {
+                item.addEventListener('click', () => {
+                    const title = item.querySelector('.suggestion-title')?.textContent || '';
+                    queryInput.value = title;
+                    queryInput.focus();
+                });
+            });
+        };
+
+        renderSuggestions();
+        if (refreshSuggestionsBtn) {
+            refreshSuggestionsBtn.addEventListener('click', renderSuggestions);
+        }
+    }
+
+    renderAgentResponseUI(markdown, responseEl, videoContainer) {
+        const rawUrl = this.extractMp4Url(markdown);
+        const url = this.normalizeStaticUrl(rawUrl);
+
+        let cleanedMarkdown = markdown;
+        if (rawUrl) {
+            const lines = markdown.split(/\n+/);
+            cleanedMarkdown = lines.filter(l => !l.includes('.mp4')).join('\n');
+        }
+        const contentHtml = this.simpleMarkdownToHtml(cleanedMarkdown || '');
+
+        if (url) {
+            responseEl.innerHTML = `
+                <div class="agent-result-card card">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Clip created</strong>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="${url}" target="_blank" rel="noopener">Open clip</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-muted small mb-2">${contentHtml}</div>
+                        <code class="small text-secondary">${url}</code>
+                    </div>
+                </div>
+            `;
+            this.renderInlineVideoIfAny(url, videoContainer, true);
+        } else {
+            responseEl.innerHTML = `
+                <div class="agent-result-card card">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-robot me-2"></i>
+                        <strong>Agent response</strong>
+                    </div>
+                    <div class="card-body">
+                        ${contentHtml}
+                    </div>
+                </div>
+            `;
+            if (videoContainer) {
+                videoContainer.style.display = 'none';
+                videoContainer.innerHTML = '';
+            }
+        }
+    }
+
+    extractMp4Url(markdown) {
+        const match = markdown.match(/\(([^)]+\.mp4)\)/i) || markdown.match(/href=["']([^"']+\.mp4)["']/i);
+        return match && match[1] ? match[1] : null;
+    }
+
+    normalizeStaticUrl(rawUrl) {
+        if (!rawUrl) return null;
+        const marker = '/static/results/';
+        const pos = rawUrl.indexOf(marker);
+        if (pos === -1) return null;
+        let url = rawUrl.slice(pos);
+        if (!url.startsWith('/')) url = '/' + url;
+        return url;
+    }
+
+    renderInlineVideoIfAny(sourceOrMarkdown, container, isUrl = false) {
+        try {
+            if (!container || !sourceOrMarkdown) return;
+            let url = null;
+            if (isUrl) {
+                url = sourceOrMarkdown;
+            } else {
+                const raw = this.extractMp4Url(sourceOrMarkdown);
+                url = this.normalizeStaticUrl(raw);
+            }
+            if (!url) return;
+
+            // Build a video player
+            const videoHtml = `
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <i class="bi bi-play-circle me-2"></i>
+                        <strong>Generated clip preview</strong>
+                    </div>
+                    <div class="card-body">
+                        <video controls preload="metadata" style="width: 100%; max-height: 420px; border-radius: 4px;">
+                            <source src="${url}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = videoHtml;
+            container.style.display = 'block';
+            // Ensure suggestions column visually aligns with new height while preserving scroll when shorter
+            const leftCol = document.getElementById('agent-left-col');
+            const suggHeader = document.getElementById('agent-suggestions-header');
+            const suggList = document.getElementById('agent-suggestions');
+            if (leftCol && suggList) {
+                const leftHeight = leftCol.getBoundingClientRect().height;
+                const headerHeight = (suggHeader?.getBoundingClientRect().height || 0);
+                // Add a small padding offset
+                const target = Math.max(280, leftHeight - headerHeight - 24);
+                suggList.style.maxHeight = `${target}px`;
+                suggList.style.overflowY = 'auto';
+            }
+        } catch (_) {
+            // no-op
+        }
     }
 
     simpleMarkdownToHtml(markdown) {
