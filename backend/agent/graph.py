@@ -86,10 +86,12 @@ class AgentGraph:
             "- For 'most exposure time' / 'highest coverage' requests for a BRAND: do NOT assume a fixed duration; call create_brand_highlight_montage(brand_name, file_info, desired_total_duration=30, segment_seconds=1.0).",
             "- For 'most exposure' requests, AVOID find_best_clip/create_video_clip; the montage tool is the correct path. If available coverage is shorter than the target, shorter output is acceptable.",
             "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
+            "- When the UI confirms 'Share to Instagram' and provides a clip path, generate a caption without asking for times (use a generic yet relevant caption) and then share immediately.",
             "- For ranking questions (exposure percentage, detections, frames, time, coverage variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",
             "- For ambiguous 'coverage' metric, default to 'coverage_avg_present' and note the choice in your response.",
             "- When rank_brands returns structured JSON, present a concise, readable list (do not hallucinate additional brands).",
             "- Also include the raw JSON on a separate line prefixed exactly with 'RANK_JSON: ' so the UI can render a table (e.g., RANK_JSON: { ... }).",
+            "- When any clip creation tool returns a file path (e.g., *.mp4), ALWAYS echo a machine-readable line: 'CLIP_PATH: <returned_path>' and include a Markdown link to it. Do not omit the path.",
         ]
         if available_brands:
             guidance_lines.append(f"Available brands in this video: {', '.join(available_brands[:100])}")

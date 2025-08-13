@@ -129,9 +129,20 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
     black = np.zeros((height, width, 3), dtype=np.uint8)
 
     try:
+        prev_end_frame = None
         for idx, (st, et) in enumerate(windows):
             start_frame = max(0, int(round(st * fps)))
             end_frame = max(start_frame + 1, int(round(et * fps)))
+
+            # If this segment overlaps/abuts the previous, treat as contiguous: no spacer and avoid duplicating frames
+            if prev_end_frame is not None:
+                if start_frame <= prev_end_frame:
+                    start_frame = prev_end_frame  # merge overlap/adjacency
+                else:
+                    # Non-contiguous: insert a short spacer before this segment
+                    for _ in range(spacer_frames):
+                        writer.write(black)
+
             cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             current = start_frame
             while current < end_frame:
@@ -143,10 +154,8 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
                 annotated = _draw_brand_overlays(frame, dets, brand_norm)
                 writer.write(annotated)
                 current += 1
-            # spacer except after last segment
-            if idx < len(windows) - 1:
-                for _ in range(spacer_frames):
-                    writer.write(black)
+
+            prev_end_frame = end_frame
     finally:
         cap.release()
         writer.release()

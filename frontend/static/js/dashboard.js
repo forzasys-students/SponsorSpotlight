@@ -551,6 +551,8 @@ class Dashboard {
         const suggestionsContainer = document.getElementById('agent-suggestions');
         const refreshSuggestionsBtn = document.getElementById('agent-refresh-suggestions');
         const videoContainer = document.getElementById('agent-video-container');
+        this.lastAgentQuery = '';
+        this.pendingShare = false;
 
         const pollTaskStatus = (taskId) => {
             const interval = setInterval(() => {
@@ -578,8 +580,21 @@ class Dashboard {
         };
 
         queryButton.addEventListener('click', () => {
-            const query = queryInput.value.trim();
+            const originalQuery = queryInput.value.trim();
+            let query = originalQuery;
             if (!query) return;
+            this.lastAgentQuery = originalQuery;
+            // Human-in-the-loop share: if the user asked to share, first create the clip only,
+            // then ask for confirmation before sharing.
+            const wantsShare = /\b(share|instagram)\b/i.test(originalQuery);
+            if (wantsShare) {
+                this.pendingShare = true;
+                // Remove trailing share clause: variations like ", and share ...", "and share ...", "share it ..."
+                query = originalQuery.replace(/\s*(,?\s*and\s+)?share[\s\S]*$/i, '').trim();
+                if (!query) query = originalQuery; // fallback safety
+            } else {
+                this.pendingShare = false;
+            }
 
             responseContainer.style.display = 'block';
             loadingSpinner.style.display = 'block';
@@ -650,6 +665,7 @@ class Dashboard {
                     { icon: 'bi-film', hint: 'Clip (10s)', text: `Find the best 10-second clip featuring ${pickBrand(0,'top brand')}` },
                     this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (5s)', text: `Create a 5-second clip with ${pickBrand(0,'top brand')}` } : null,
                     this.fileType === 'video' ? { icon: 'bi-scissors', hint: 'Clip (4s)', text: `Create a 4-second clip with ${pickBrand(1,'another brand')}` } : null,
+                    this.fileType === 'video' ? { icon: 'bi-lightning-charge', hint: 'Most exposure + share', text: `Find the most exposure time of ${pickBrand(0,'top brand')}, create a clip with duration of 5 seconds and share it on Instagram` } : null,
                 ].filter(Boolean)
             },
             this.fileType === 'video' ? {
@@ -706,11 +722,60 @@ class Dashboard {
             queryInput.value = `Create a 5-second clip with ${brand}`;
             queryButton.click();
         });
+
+        // Confirm share button handler
+        document.addEventListener('click', (e) => {
+            const btn = e.target?.closest('[data-action="confirm-share"]');
+            if (!btn) return;
+            const localPath = btn.getAttribute('data-local');
+            if (!localPath) return;
+            // Trigger async share flow via agent
+            responseContainer.style.display = 'block';
+            loadingSpinner.style.display = 'block';
+            responseElement.style.display = 'none';
+            loadingText.textContent = 'Submitting to Instagram...';
+            fetch(`/api/agent_query/${this.fileHash}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: `Share the clip at ${localPath} on Instagram. Yes, I confirm.` })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.task_id) {
+                    // Start polling
+                    const interval = setInterval(() => {
+                        fetch(`/api/agent_task_status/${data.task_id}`)
+                            .then(resp => resp.json())
+                            .then(st => {
+                                loadingText.textContent = st.message || 'Sharing...';
+                                if (st.is_complete) {
+                                    clearInterval(interval);
+                                    loadingSpinner.style.display = 'none';
+                                    responseElement.style.display = 'block';
+                                    responseElement.innerHTML = this.simpleMarkdownToHtml(st.result || 'Share complete.');
+                                }
+                            })
+                            .catch(() => clearInterval(interval));
+                    }, 2000);
+                } else {
+                    loadingSpinner.style.display = 'none';
+                    responseElement.style.display = 'block';
+                    responseElement.innerHTML = this.simpleMarkdownToHtml(data.response || '');
+                }
+            })
+            .catch(err => {
+                loadingSpinner.style.display = 'none';
+                responseElement.style.display = 'block';
+                responseElement.innerHTML = `<div class="alert alert-danger">Failed to submit share: ${err}</div>`;
+            });
+            this.pendingShare = false;
+        });
     }
 
     renderAgentResponseUI(markdown, responseEl, videoContainer) {
         const rawUrl = this.extractMp4Url(markdown);
-        const url = this.normalizeStaticUrl(rawUrl);
+        const explicitPath = this.parseClipPath(markdown);
+        const url = this.normalizeStaticUrl(explicitPath || rawUrl);
 
         let cleanedMarkdown = markdown;
         if (rawUrl) {
@@ -728,6 +793,18 @@ class Dashboard {
 
         if (url) {
             const rankTableHtml = rankJson ? this.renderRankTable(rankJson) : '';
+            // If the last query asked to share, show a confirmation CTA instead of auto-sharing
+            const wantShare = this.pendingShare || (this.lastAgentQuery || '').toLowerCase().includes('share');
+            const rawLocal = explicitPath || rawUrl;
+            const confirmShareHtml = wantShare && rawLocal ? `
+                <div class="alert alert-warning d-flex justify-content-between align-items-center mt-2">
+                    <div>
+                        <i class="bi bi-question-circle me-2"></i>
+                        Ready to post this clip to Instagram?
+                    </div>
+                    <button class="btn btn-sm btn-primary" data-action="confirm-share" data-local="${rawLocal}">Share to Instagram</button>
+                </div>
+            ` : '';
             responseEl.innerHTML = `
                 <div class="agent-result-card card">
                     <div class="card-header d-flex align-items-center justify-content-between">
@@ -743,6 +820,7 @@ class Dashboard {
                         <div class="text-muted small mb-2">${contentHtml}</div>
                         ${rankTableHtml}
                         <code class="small text-secondary">${url}</code>
+                        ${confirmShareHtml}
                     </div>
                 </div>
             `;
@@ -783,6 +861,15 @@ class Dashboard {
         } catch (_) {
             return null;
         }
+    }
+
+    parseClipPath(markdown) {
+        if (!markdown) return null;
+        const match = markdown.match(/^\s*CLIP_PATH:\s*(.+)$/m);
+        if (!match) return null;
+        let p = match[1].trim();
+        if (p.startsWith('sandbox:')) p = p.slice('sandbox:'.length);
+        return p.replace(/^`|`$/g, '').replace(/^"|"$/g, '').replace(/^'|'$/g, '');
     }
 
     renderRankTable(rankJson) {
@@ -893,9 +980,14 @@ class Dashboard {
 
     simpleMarkdownToHtml(markdown) {
         // Basic markdown conversion for demonstration purposes.
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return markdown
-            .replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+        // 1) Convert Markdown links first: [text](url)
+        const mdLink = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+        let html = (markdown || '').replace(mdLink, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+        // 2) Autolink bare URLs, avoiding those inside attributes or tags by requiring start or whitespace before
+        const autoLink = /(^|\s)(https?:\/\/[^\s<]+)/g;
+        html = html.replace(autoLink, (m, p1, p2) => `${p1}<a href="${p2}" target="_blank" rel="noopener noreferrer">${p2}</a>`);
+        // 3) Headings, quotes, emphasis, lists
+        return html
             .replace(/^### (.*$)/gim, '<h3>$1</h3>')
             .replace(/^## (.*$)/gim, '<h2>$1</h2>')
             .replace(/^# (.*$)/gim, '<h1>$1</h1>')
