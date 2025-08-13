@@ -293,11 +293,13 @@ def agent_query(file_hash):
     # Get the video path for the share node
     video_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'output.mp4')
 
-    # Prepare file info for the agent
+    # Prepare file info for the agent (include video metadata for precise FPS)
+    video_metadata = stats_data.get('video_metadata') or stats_data.get('video_meta') or {}
     file_info = {
         'stats_data': stats_data,
         'timeline_stats_data': timeline_stats_data,
-        'video_path': video_path
+        'video_path': video_path,
+        'video_metadata': video_metadata,
     }
 
     from backend.agent.router import AgentRouter

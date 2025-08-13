@@ -1,6 +1,6 @@
 from typing import TypedDict, Annotated, Sequence, Optional, Any
 import operator
-from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.messages import BaseMessage, ToolMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 import inspect
@@ -64,7 +64,27 @@ class AgentGraph:
 
     def _call_model(self, state):
         messages = state["messages"]
-        response = self.model.invoke(messages)
+        # Build a guiding system prompt that helps the LLM parse user intent
+        file_info = state.get("file_info") or {}
+        timeline = file_info.get("timeline_stats_data") or {}
+        available_brands = list(timeline.keys())
+
+        guidance_lines = [
+            "You are an assistant that controls tools to analyze videos and create/share clips.",
+            "- Normalize brand names: match case-insensitively and ignore trailing words like 'logo' or 'brand'.",
+            "- Prefer selecting a brand from the available list when possible.",
+            "- If user specifies a duration in natural language (e.g., 'four seconds'), convert it to seconds.",
+            "- For 'create a N-second video with BRAND' requests: (1) find_best_clip for BRAND, (2) create_video_clip with end_time = start_time + N.",
+            "- If duration is not provided, default to 10 seconds.",
+            "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
+        ]
+        if available_brands:
+            guidance_lines.append(f"Available brands in this video: {', '.join(available_brands[:100])}")
+
+        system_prompt = "\n".join(guidance_lines)
+
+        messages_with_system = [SystemMessage(content=system_prompt)] + list(messages)
+        response = self.model.invoke(messages_with_system)
         return {"messages": [response]}
 
     def _execute_tools(self, state: AgentState) -> dict:

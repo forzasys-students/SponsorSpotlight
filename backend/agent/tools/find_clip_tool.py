@@ -11,7 +11,28 @@ def find_best_clip(brand_name: str, file_info: dict) -> dict:
     timeline_stats = file_info.get('timeline_stats_data', {})
     video_metadata = file_info.get('video_metadata', {})
 
-    brand_frames = timeline_stats.get(brand_name)
+    # Match brand case-insensitively; rely on LLM to normalize phrasing (e.g., removing 'logo')
+    normalized = brand_name.strip().lower()
+    brand_key = None
+
+    if normalized in {k.lower() for k in timeline_stats.keys()}:
+        # Exact case-insensitive match
+        for k in timeline_stats.keys():
+            if k.lower() == normalized:
+                brand_key = k
+                break
+    else:
+        # Fallback to partial match (e.g., user typed a subset or extra words)
+        for k in timeline_stats.keys():
+            kl = k.lower()
+            if normalized in kl or kl in normalized:
+                brand_key = k
+                break
+
+    if brand_key is None:
+        return {"error": f"No detections found for brand: {brand_name}"}
+
+    brand_frames = timeline_stats.get(brand_key)
     if not brand_frames:
         return {"error": f"No detections found for brand: {brand_name}"}
 

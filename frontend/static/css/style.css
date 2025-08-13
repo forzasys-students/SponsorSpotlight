@@ -17,7 +17,7 @@
 /* Main Styles for SponsorSpotlight */
 
 body {
-    background-color: #0f1419;
+    background-color: #161F36;
     color: #e6edf3;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-weight: 400;
@@ -379,7 +379,7 @@ body {
     width: 140px;
     font-size: 0.85rem;
     font-weight: 500;
-    color: #495057;
+    color: whitesmoke;
     text-align: right;
     padding-right: 15px;
     flex-shrink: 0;
