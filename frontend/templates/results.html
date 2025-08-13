@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results - SponsorSpotlight</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">SponsorSpotlight</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row g-4">
+            <!-- Main content column (≈70%) -->
+            <div class="col-12 col-lg-8 col-xl-9">
+                <!-- Header with file info and action buttons -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h1 class="mb-1">Processing Complete</h1>
+                        <p class="text-muted mb-0">
+                            <i class="bi bi-file-earmark"></i> {{ original_name }}
+                            <span class="badge bg-primary ms-2">{{ file_type.title() }}</span>
+                        </p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('show_dashboard', file_hash=file_hash) }}" class="btn btn-success btn-lg">
+                            <i class="bi bi-graph-up"></i> Analytics Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Main result container -->
+                <div class="card result-card">
+                    <div class="card-body p-0">
+                        {% if file_type == 'image' %}
+                            <div class="image-result-container">
+                                <img src="{{ url_for('static', filename=output_path) }}" class="img-fluid rounded" alt="Processed image with logo detections">
+                            </div>
+                        {% else %}
+                        <ul class="nav nav-tabs px-3 pt-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="tab-ondemand-link" data-bs-toggle="tab" data-bs-target="#tab-ondemand" type="button" role="tab">On-demand Overlay</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="tab-annotated-link" data-bs-toggle="tab" data-bs-target="#tab-annotated" type="button" role="tab">All Annotations</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content p-3 pt-2">
+                            <div class="tab-pane fade show active" id="tab-ondemand" role="tabpanel" aria-labelledby="tab-ondemand-link">
+                                <div class="video-result-container position-relative">
+                                    <video id="mainVideo" controls class="w-100 rounded" poster="">
+                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/raw.mp4') }}" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                    <canvas id="overlayCanvas" class="position-absolute top-0 start-0"></canvas>
+                                </div>
+                            </div>
+                            <div class="tab-pane fade" id="tab-annotated" role="tabpanel" aria-labelledby="tab-annotated-link">
+                                <div class="video-result-container">
+                                    <video id="annotatedVideo" controls class="w-100 rounded" poster="">
+                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/output.mp4') }}" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Interactive Timeline (for videos only) -->
+                {% if file_type == 'video' %}
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock-history"></i> Logo Detection Timeline
+                            <small class="text-muted ms-2">Click on segments to jump to that time</small>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="timeline-container">
+                            <div id="timeline-loading" class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading timeline...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Generating timeline...</p>
+                            </div>
+                            <div id="timeline-content" class="d-none">
+                                <!-- Timeline will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+
+            <!-- Sidebar column (≈30%) -->
+            <div class="col-12 col-lg-4 col-xl-3">
+                {% if file_type == 'video' %}
+                <div id="detection-sidebar" class="card sidebar-card">
+                    <div class="card-header p-0">
+                        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="simple-tab" data-bs-toggle="tab" data-bs-target="#tab-simple" type="button" role="tab">Simple</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#tab-advanced" type="button" role="tab">Advanced</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="tab-content">
+                            <div class="tab-pane fade show active" id="tab-simple" role="tabpanel" aria-labelledby="simple-tab">
+                                <div id="simple-detections" class="list-group list-group-flush small"></div>
+                            </div>
+                            <div class="tab-pane fade" id="tab-advanced" role="tabpanel" aria-labelledby="advanced-tab"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+                <!-- Quick stats summary -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-eye-fill text-primary stat-icon-sm"></i>
+                                    <h4 id="quick-total-detections" class="mb-0">-</h4>
+                                    <small class="text-muted">Total Detections</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-award-fill text-success stat-icon-sm"></i>
+                                    <h4 id="quick-unique-logos" class="mb-0">-</h4>
+                                    <small class="text-muted">Unique Logos</small>
+                                </div>
+                            </div>
+                            {% if file_type == 'video' %}
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-clock-fill text-warning stat-icon-sm"></i>
+                                    <h4 id="quick-total-exposure" class="mb-0">-</h4>
+                                    <small class="text-muted">Total Exposure</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="quick-stat">
+                                    <i class="bi bi-trophy-fill text-danger stat-icon-sm"></i>
+                                    <h4 id="quick-top-logo" class="mb-0">-</h4>
+                                    <small class="text-muted">Top Logo</small>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="col-md-6">
+                                <div class="quick-stat">
+                                    <i class="bi bi-trophy-fill text-danger stat-icon-sm"></i>
+                                    <h4 id="quick-top-logo" class="mb-0">-</h4>
+                                    <small class="text-muted">Most Detected</small>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="/" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left"></i> Process Another File
+                    </a>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary" onclick="downloadResults()">
+                            <i class="bi bi-download"></i> Download
+                        </button>
+                        <a href="{{ url_for('show_dashboard', file_hash=file_hash) }}" class="btn btn-success">
+                            <i class="bi bi-graph-up"></i> View Full Analytics
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-white mt-5 py-3">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2025 SponsorSpotlight</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileType = '{{ file_type }}';
+            const fileHash = '{{ file_hash }}';
+            const video = document.getElementById('mainVideo');
+            let videoMetadata = {};
+            let logoStats = {};
+
+            // Fetch main statistics
+            fetch(`/api/stats/${fileHash}`)
+                .then(response => response.json())
+                .then(data => {
+                    videoMetadata = data.video_metadata || {};
+                    logoStats = data.logo_stats || {};
+                    updateQuickStats(logoStats);
+
+                    if (fileType === 'video' && video) {
+                        const initialize = () => {
+                            if (video.readyState >= 1) { // HAVE_METADATA or higher
+                                videoMetadata.duration = video.duration;
+                                fetchAccurateTimeline();
+                            }
+                        };
+                        video.addEventListener('loadedmetadata', initialize);
+                        if (video.readyState >= 1) {
+                            initialize();
+                        }
+                    }
+                })
+                .catch(handleFetchError);
+
+            function fetchAccurateTimeline() {
+                fetch(`/api/timeline_stats/${fileHash}`)
+                    .then(response => response.json())
+                    .then(timelineData => {
+                        generateAccurateTimeline(timelineData, videoMetadata);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching timeline data:', error);
+                        document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load accurate timeline</div>';
+                    });
+            }
+
+            function updateQuickStats(stats) {
+                const logos = Object.keys(stats);
+                const totalDetections = logos.reduce((sum, logo) => sum + stats[logo].detections, 0);
+                const uniqueLogos = logos.length;
+                
+                document.getElementById('quick-total-detections').textContent = totalDetections.toLocaleString();
+                document.getElementById('quick-unique-logos').textContent = uniqueLogos;
+                
+                if (fileType === 'video') {
+                    const totalExposure = logos.reduce((sum, logo) => sum + (stats[logo].time || 0), 0);
+                    const topLogo = logos.sort((a, b) => (stats[b].percentage || 0) - (stats[a].percentage || 0))[0] || '-';
+                    
+                    document.getElementById('quick-total-exposure').textContent = `${totalExposure.toFixed(1)}s`;
+                    document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? `${topLogo.substring(0, 12)}...` : topLogo;
+                } else {
+                    const topLogo = logos.sort((a, b) => stats[b].detections - stats[a].detections)[0] || '-';
+                    document.getElementById('quick-top-logo').textContent = topLogo.length > 12 ? `${topLogo.substring(0, 12)}...` : topLogo;
+                }
+            }
+            
+            let globalTimelineData = {};
+            let advancedRendered = false;
+            function generateAccurateTimeline(timelineData, metadata) {
+                globalTimelineData = timelineData || {};
+                const timelineContent = document.getElementById('timeline-content');
+                const timelineLoading = document.getElementById('timeline-loading');
+
+                const topLogos = Object.keys(logoStats)
+                    .sort((a, b) => (logoStats[b].time || 0) - (logoStats[a].time || 0))
+                    .slice(0, 5);
+                
+                if (topLogos.length === 0) {
+                    timelineLoading.innerHTML = '<div class="text-muted">No timeline data available.</div>';
+                    return;
+                }
+
+                const duration = metadata.duration;
+                let timelineHTML = `
+                    <div class="timeline-wrapper">
+                        <div class="timeline-header">
+                            <span class="timeline-time">0:00</span>
+                            <span class="timeline-time">${formatTime(duration)}</span>
+                        </div>
+                        <div class="timeline-ruler"></div>
+                        <div class="timeline-playhead" id="timeline-playhead"></div>
+                `;
+
+                topLogos.forEach(logo => {
+                    const frameNumbers = timelineData[logo] || [];
+                    timelineHTML += `
+                        <div class="timeline-track">
+                            <div class="timeline-label" title="${logo}">${logo.length > 15 ? `${logo.substring(0, 15)}...` : logo}</div>
+                            <div class="timeline-bar-container" data-logo="${logo}">
+                                ${generateSegmentsFromFrames(logo, frameNumbers, metadata)}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                timelineHTML += '</div>';
+                timelineContent.innerHTML = timelineHTML;
+                timelineLoading.style.display = 'none';
+                timelineContent.classList.remove('d-none');
+                
+                setupTimelineInteraction();
+                initializeSidebar(timelineData, metadata);
+            }
+
+            function generateSegmentsFromFrames(logo, frames, metadata) {
+                if (frames.length === 0) return '';
+                
+                const frameGapTolerance = 5; // Allow a gap of up to 5 frames
+                const segments = [];
+                let startFrame = frames[0];
+                
+                for (let i = 1; i < frames.length; i++) {
+                    // If the gap is larger than our tolerance, create a new segment
+                    if (frames[i] - frames[i - 1] > frameGapTolerance) {
+                        segments.push({ start: startFrame, end: frames[i - 1] });
+                        startFrame = frames[i];
+                    }
+                }
+                // Add the last segment
+                segments.push({ start: startFrame, end: frames[frames.length - 1] });
+                
+                const fps = metadata.fps;
+                const duration = metadata.duration;
+
+                return segments.map(seg => {
+                    const startTime = seg.start / fps;
+                    const endTime = seg.end / fps;
+                    const startPercent = (startTime / duration) * 100;
+                    // Ensure width is at least a minimum value to be visible
+                    const widthPercent = Math.max(((endTime - startTime) / duration) * 100, 0.1);
+                    
+                    return `
+                        <div class="timeline-segment" 
+                             data-logo="${logo}"
+                             data-start="${startTime.toFixed(2)}"
+                             data-end="${endTime.toFixed(2)}"
+                             style="left: ${startPercent.toFixed(2)}%; width: ${widthPercent.toFixed(2)}%;"
+                             title="${logo}: ${formatTime(startTime)} - ${formatTime(endTime)}">
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            function handleFetchError(error) {
+                console.error('Error fetching statistics:', error);
+                document.getElementById('quick-total-detections').textContent = 'Error';
+                document.getElementById('quick-unique-logos').textContent = 'Error';
+                if (fileType === 'video') {
+                    document.getElementById('quick-total-exposure').textContent = 'Error';
+                    document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Failed to load timeline</div>';
+                }
+                document.getElementById('quick-top-logo').textContent = 'Error';
+            }
+            
+            function setupTimelineInteraction() {
+                const segments = document.querySelectorAll('.timeline-segment');
+                const playhead = document.getElementById('timeline-playhead');
+                const tooltip = createTooltip();
+                const wrapper = document.querySelector('.timeline-wrapper');
+                const ruler = document.querySelector('.timeline-ruler');
+                const totalDuration = videoMetadata.duration || (video ? video.duration : 0);
+                let isDragging = false;
+
+                const layoutPlayhead = () => {
+                    if (!wrapper || !ruler || !playhead) return;
+                    const top = ruler.offsetTop;
+                    // Height from top of ruler down to end of tracks container
+                    const tracks = document.querySelectorAll('.timeline-track');
+                    const lastTrack = tracks[tracks.length - 1];
+                    const bottom = lastTrack ? (lastTrack.offsetTop + lastTrack.offsetHeight) : wrapper.offsetHeight;
+                    const height = Math.max(0, bottom - top);
+                    playhead.style.top = `${top}px`;
+                    playhead.style.height = `${height}px`;
+                };
+
+                const setCurrentTimeFromClientX = (clientX) => {
+                    if (!ruler || !video || !totalDuration) return;
+                    const rect = ruler.getBoundingClientRect();
+                    const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                    const t = pct * totalDuration;
+                    video.currentTime = t;
+                    if (annotatedVideo) annotatedVideo.currentTime = t;
+                    updatePlayhead();
+                };
+
+                segments.forEach(segment => {
+                    segment.addEventListener('click', function(e) {
+                        const startTime = parseFloat(this.dataset.start);
+                        if (video && !isNaN(startTime)) {
+                            video.currentTime = startTime;
+                            updatePlayhead();
+                        }
+                        segments.forEach(s => s.classList.remove('active'));
+                        this.classList.add('active');
+                    });
+                    segment.addEventListener('mouseenter', function(e) {
+                        const logo = this.dataset.logo;
+                        const start = formatTime(parseFloat(this.dataset.start));
+                        const end = formatTime(parseFloat(this.dataset.end));
+                        tooltip.textContent = `${logo}: ${start} - ${end}`;
+                        tooltip.style.display = 'block';
+                        updateTooltipPosition(e, tooltip);
+                        tooltip.classList.add('show');
+                    });
+                    segment.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('show');
+                        setTimeout(() => {
+                            if (!tooltip.classList.contains('show')) {
+                                tooltip.style.display = 'none';
+                            }
+                        }, 200);
+                    });
+                    segment.addEventListener('mousemove', function(e) {
+                        updateTooltipPosition(e, tooltip);
+                    });
+                });
+
+                // Dragging on playhead
+                if (playhead) {
+                    playhead.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        e.preventDefault();
+                    });
+                }
+                document.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        setCurrentTimeFromClientX(e.clientX);
+                    }
+                });
+                document.addEventListener('mouseup', () => { isDragging = false; });
+
+                // Clicking/dragging on ruler to seek
+                if (ruler) {
+                    ruler.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        setCurrentTimeFromClientX(e.clientX);
+                    });
+                }
+
+                // Update playhead as video plays (aligned to ruler start)
+                function updatePlayhead() {
+                    if (!video || !playhead || !totalDuration || !ruler || !wrapper) return;
+                    const wrapperRect = wrapper.getBoundingClientRect();
+                    const rulerRect = ruler.getBoundingClientRect();
+                    const pct = Math.min(1, Math.max(0, video.currentTime / totalDuration));
+                    const leftPx = (rulerRect.left - wrapperRect.left) + pct * rulerRect.width;
+                    playhead.style.left = `${leftPx}px`;
+                }
+                if (video) {
+                    video.addEventListener('timeupdate', () => {
+                        updatePlayhead();
+                        updateSidebarForCurrentFrame();
+                        // Attempt to keep other media in sync
+                        if (annotatedVideo && !isDragging) {
+                            const drift = Math.abs((annotatedVideo.currentTime || 0) - (video.currentTime || 0));
+                            if (drift > 0.12) annotatedVideo.currentTime = video.currentTime;
+                            if (video.paused !== annotatedVideo.paused) {
+                                if (video.paused) annotatedVideo.pause(); else annotatedVideo.play().catch(()=>{});
+                            }
+                            if (annotatedVideo.playbackRate !== video.playbackRate) {
+                                annotatedVideo.playbackRate = video.playbackRate;
+                            }
+                        }
+                    });
+                }
+
+                // Also mirror actions initiated on the annotated player back to raw player and timeline
+                if (annotatedVideo) {
+                    annotatedVideo.addEventListener('timeupdate', () => {
+                        if (!video || isDragging) return;
+                        const drift = Math.abs((video.currentTime || 0) - (annotatedVideo.currentTime || 0));
+                        if (drift > 0.12) video.currentTime = annotatedVideo.currentTime;
+                        updatePlayhead();
+                        updateSidebarForCurrentFrame();
+                        drawOverlayForCurrentFrame();
+                    });
+                    annotatedVideo.addEventListener('play', () => {
+                        if (video && video.paused) video.play().catch(()=>{});
+                    });
+                    annotatedVideo.addEventListener('pause', () => {
+                        if (video && !video.paused) video.pause();
+                    });
+                    annotatedVideo.addEventListener('ratechange', () => {
+                        if (video) video.playbackRate = annotatedVideo.playbackRate;
+                    });
+                    annotatedVideo.addEventListener('seeking', () => {
+                        if (video) video.currentTime = annotatedVideo.currentTime;
+                        updatePlayhead();
+                        updateSidebarForCurrentFrame();
+                        drawOverlayForCurrentFrame();
+                    });
+                }
+
+                layoutPlayhead();
+                window.addEventListener('resize', layoutPlayhead);
+                updatePlayhead();
+                // Lazy render Advanced tab when user activates it
+                const advTab = document.getElementById('advanced-tab');
+                if (advTab) {
+                    advTab.addEventListener('shown.bs.tab', () => {
+                        if (!advancedRendered) {
+                            renderAdvancedTab();
+                            advancedRendered = true;
+                        }
+                    });
+                }
+            }
+
+            // Sidebar logic
+            let frameToLogosIndex = {};
+            let lastRenderedFrame = -1;
+            let classSelection = new Set();
+            let frameDetections = null; // Map frame -> detections[]
+            function initializeSidebar(timelineData, metadata) {
+                // Build reverse frame index: frame -> [logos]
+                frameToLogosIndex = {};
+                Object.keys(timelineData).forEach(logo => {
+                    const frames = timelineData[logo] || [];
+                    frames.forEach(f => {
+                        if (!frameToLogosIndex[f]) frameToLogosIndex[f] = [];
+                        frameToLogosIndex[f].push(logo);
+                    });
+                });
+                // Initial render
+                updateSidebarForCurrentFrame();
+                // Load per-frame detections for overlays if available
+                loadFrameDetections();
+            }
+
+            function updateSidebarForCurrentFrame() {
+                const sidebar = document.getElementById('simple-detections');
+                if (!sidebar || !videoMetadata || !videoMetadata.fps) return;
+                const fps = videoMetadata.fps;
+                const frame = Math.floor((video?.currentTime || 0) * fps);
+                if (frame === lastRenderedFrame) return;
+                lastRenderedFrame = frame;
+
+                const logos = (frameToLogosIndex[frame] || []).slice().sort((a,b)=>a.localeCompare(b));
+                if (logos.length === 0) {
+                    sidebar.innerHTML = '<div class="list-group-item text-muted">No detections</div>';
+                    return;
+                }
+                sidebar.innerHTML = logos.map(name => `
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center simple-class-item ${classSelection.has(name) ? 'active' : ''}" data-class="${name}">
+                        <span>${name}</span>
+                    </button>
+                `).join('');
+                // Bind click toggles
+                document.querySelectorAll('.simple-class-item').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const cls = btn.dataset.class;
+                        if (classSelection.has(cls)) classSelection.delete(cls); else classSelection.add(cls);
+                        btn.classList.toggle('active');
+                        drawOverlayForCurrentFrame();
+                    });
+                });
+                const yInput = document.getElementById('overlay-offset');
+                if (yInput) yInput.addEventListener('input', drawOverlayForCurrentFrame);
+                // Redraw overlay on updates
+                drawOverlayForCurrentFrame();
+            }
+
+            async function loadFrameDetections() {
+                try {
+                    const res = await fetch(`/static/results/${fileHash}/frame_detections.jsonl`);
+                    if (!res.ok) return;
+                    const text = await res.text();
+                    frameDetections = new Map();
+                    text.split('\n').forEach(line => {
+                        if (!line.trim()) return;
+                        try {
+                            const obj = JSON.parse(line);
+                            frameDetections.set(obj.frame, obj.detections || []);
+                        } catch (_) {}
+                    });
+                } catch (_) {}
+            }
+
+            function drawOverlayForCurrentFrame() {
+                const canvas = document.getElementById('overlayCanvas');
+                const vid = document.getElementById('mainVideo');
+                if (!canvas || !vid || !videoMetadata || !videoMetadata.fps) return;
+                const ctx = canvas.getContext('2d');
+                // Size canvas to video element client size
+                const rect = vid.getBoundingClientRect();
+                canvas.width = rect.width; canvas.height = rect.height;
+                // Clear
+                ctx.clearRect(0,0,canvas.width, canvas.height);
+                if (!frameDetections || classSelection.size === 0) return;
+
+                // Compute scale if displayed size differs from intrinsic
+                const videoW = vid.videoWidth || rect.width;
+                const videoH = vid.videoHeight || rect.height;
+                const scaleX = rect.width / videoW;
+                const scaleY = rect.height / videoH;
+                const yOffset = -18; // hardcoded vertical nudge
+
+                // Current frame index
+                const fps = videoMetadata.fps;
+                const frame = Math.floor((vid.currentTime || 0) * fps);
+                const dets = frameDetections.get(frame) || [];
+                dets.forEach(det => {
+                    if (!classSelection.has(det.class)) return;
+                    const poly = det.polygon || [];
+                    if (poly.length >= 4) {
+                        ctx.save();
+                        ctx.lineWidth = 3;
+                        ctx.strokeStyle = '#58a6ff';
+                        ctx.beginPath();
+                        poly.forEach((p, idx) => {
+                            const x = p[0] * scaleX;
+                            const y = p[1] * scaleY + yOffset;
+                            if (idx === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                        });
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                });
+            }
+
+            async function renderAdvancedTab() {
+                try {
+                    const payload = {
+                        video_metadata: videoMetadata || {},
+                        logo_stats: logoStats || {},
+                        timeline_stats: globalTimelineData || {}
+                    };
+                    // Try optional coverage debug artifacts if present
+                    const base = `/static/results/${fileHash}`;
+                    const safeFetch = async (path) => {
+                        try { const r = await fetch(path); if (r.ok) return await r.json(); } catch(_) {}
+                        return undefined;
+                    };
+                    const covDebug = await safeFetch(`${base}/coverage_debug.json`);
+                    const covPerFrame = await safeFetch(`${base}/coverage_per_frame.json`);
+                    if (covDebug) payload.coverage_debug = covDebug;
+                    if (covPerFrame) payload.coverage_per_frame = covPerFrame;
+
+                    const container = document.getElementById('tab-advanced');
+                    container.innerHTML = '';
+                    const pre = document.createElement('pre');
+                    pre.className = 'json-view';
+                    pre.textContent = JSON.stringify(payload, null, 2);
+                    container.appendChild(pre);
+                } catch (e) {
+                    const container = document.getElementById('tab-advanced');
+                    container.innerHTML = `<div class="alert alert-danger">Failed to load advanced JSON: ${e}</div>`;
+                }
+            }
+            
+            function createTooltip() {
+                const tooltip = document.createElement('div');
+                tooltip.className = 'timeline-tooltip';
+                document.body.appendChild(tooltip);
+                return tooltip;
+            }
+            
+            function updateTooltipPosition(e, tooltip) {
+                const rect = tooltip.getBoundingClientRect();
+                const x = e.pageX - rect.width / 2;
+                const y = e.pageY - rect.height - 10;
+                
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `${y}px`;
+            }
+            
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+        });
+
+        // Download function
+        function downloadResults() {
+            const fileHash = '{{ file_hash }}';
+            const fileType = '{{ file_type }}';
+            const extension = fileType === 'image' ? 'jpg' : 'mp4';
+            
+            // Create a temporary link to download the processed file
+            const link = document.createElement('a');
+            link.href = '{{ url_for("static", filename=output_path) }}';
+            link.download = `processed_${fileHash}.${extension}`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

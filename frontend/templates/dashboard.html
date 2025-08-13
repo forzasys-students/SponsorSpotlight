@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SponsorSpotlight</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Chart.js has no CSS file; script is included below -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">SponsorSpotlight</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('show_results', file_hash=file_hash) }}">
+                    <i class="bi bi-arrow-left"></i> Back to Results
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>Analytics Dashboard</h1>
+                    <div>
+                        <span class="badge bg-primary">{{ file_type.title() }}</span>
+                        <span class="text-muted">{{ original_name }}</span>
+                    </div>
+                </div>
+
+                <!-- Dashboard Tabs -->
+                <ul class="nav nav-tabs nav-fill" id="dashboardTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+                            <i class="bi bi-graph-up"></i> Overview
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="detailed-tab" data-bs-toggle="tab" data-bs-target="#detailed" type="button" role="tab">
+                            <i class="bi bi-table"></i> Detailed Analysis
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="insights-tab" data-bs-toggle="tab" data-bs-target="#insights" type="button" role="tab">
+                            <i class="bi bi-lightbulb"></i> Insights
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content mt-4" id="dashboardTabContent">
+                    <!-- Overview Tab -->
+                    <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                        <!-- Key Metrics Cards -->
+                        <div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
+                            <div class="col">
+                                <div class="card stat-card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-eye-fill stat-icon text-primary"></i>
+                                        <h3 id="total-detections" class="stat-number">0</h3>
+                                        <p class="stat-label">Total Detections</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="card stat-card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-award-fill stat-icon text-success"></i>
+                                        <h3 id="unique-logos" class="stat-number">0</h3>
+                                        <p class="stat-label">Unique Logos</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="card stat-card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-clock-fill stat-icon text-warning"></i>
+                                        <h3 id="total-exposure" class="stat-number">0s</h3>
+                                        <p class="stat-label">Total Exposure</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <div class="card stat-card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-trophy-fill stat-icon text-danger"></i>
+                                        <h3 id="top-logo" class="stat-number">-</h3>
+                                        <p class="stat-label">Top Logo</p>
+                                    </div>
+                                </div>
+                            </div>
+                             {% if file_type == 'video' %}
+                            <div class="col">
+                                 <div class="card stat-card">
+                                     <div class="card-body text-center">
+                                         <i class="bi bi-aspect-ratio-fill stat-icon text-info"></i>
+                                         <h3 id="top-coverage" class="stat-number">-</h3>
+                                         <p class="stat-label">Top Coverage (Overall)</p>
+                                     </div>
+                                 </div>
+                             </div>
+                             {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <!-- Top Performers -->
+                            <div class="col-md-4">
+                                <div class="card h-100">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-trophy"></i> Top Performers</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="top-performers-list">
+                                            <!-- Populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Exposure Distribution Chart -->
+                            <div class="col-md-8">
+                                <div class="card h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h5><i class="bi bi-pie-chart"></i> Exposure Distribution</h5>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <input type="radio" class="btn-check" name="chartType" id="pieChart" checked>
+                                            <label class="btn btn-outline-primary" for="pieChart">Pie</label>
+                                            <input type="radio" class="btn-check" name="chartType" id="barChart">
+                                            <label class="btn btn-outline-primary" for="barChart">Bar</label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="exposureChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Analysis Tab -->
+                    <div class="tab-pane fade" id="detailed" role="tabpanel">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control" id="searchFilter" placeholder="Search logos...">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="sortBy">
+                                    <option value="detections">Sort by Detections</option>
+                                    {% if file_type == 'video' %}
+                                    <option value="time">Sort by Exposure Time</option>
+                                    <option value="percentage">Sort by Percentage</option>
+                                    <option value="frames">Sort by Frames</option>
+                                     <option value="coverage">Sort by Avg. Coverage</option>
+                                     <option value="max_coverage">Sort by Max Coverage</option>
+                                    {% endif %}
+                                    <option value="name">Sort by Name</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="sortOrder">
+                                    <option value="desc">Descending</option>
+                                    <option value="asc">Ascending</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-table"></i> Detailed Logo Analysis</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover" id="detailedTable">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>Logo</th>
+                                                <th>Detections</th>
+                                                {% if file_type == 'video' %}
+                                                <th>Frames</th>
+                                                <th>Time (s)</th>
+                                                <th>Percentage</th>
+                                                <th>Avg. per Frame</th>
+                                                 <th>Avg. Coverage (%)</th>
+                                                 <th>Max Coverage (%)</th>
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody id="detailedTableBody">
+                                            <!-- Populated by JavaScript -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insights Tab -->
+                    <div class="tab-pane fade" id="insights" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card mb-4">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-robot"></i> Ask Our AI Agent</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="agent-interface">
+                                            <div class="row g-3 align-items-stretch">
+                                                <div class="col-md-7 d-flex flex-column" id="agent-left-col">
+                                                    <div class="input-group">
+                                                        <input type="text" id="agent-query-input" class="form-control form-control-lg" placeholder="e.g., 'Analyze the video and summarize key insights'">
+                                                        <button id="agent-query-button" class="btn btn-primary">Ask</button>
+                                                    </div>
+                                                    <div id="agent-response-container" class="mt-3" style="display: none;">
+                                                        <div id="agent-loading" class="text-center">
+                                                            <div class="spinner-border text-primary" role="status"></div>
+                                                            <p class="mt-2 text-muted">Thinking...</p>
+                                                        </div>
+                                                        <div id="agent-response" class="p-3 rounded"></div>
+                                                    </div>
+                                                    <div id="agent-video-container" class="mt-3" style="display: none;"></div>
+                                                </div>
+                                                <div class="col-md-5 d-flex flex-column">
+                                                    <div id="agent-suggestions-header" class="d-flex justify-content-between align-items-center mb-2">
+                                                        <h6 class="mb-0"><i class="bi bi-stars"></i> Suggested queries</h6>
+                                                        <button id="agent-refresh-suggestions" class="btn btn-link btn-sm p-0">refresh</button>
+                                                    </div>
+                                                    <div id="agent-suggestions" class="list-group list-group-flush agent-suggestions flex-grow-1">
+                                                        <!-- Suggestions populated by JavaScript -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-lightbulb"></i> Key Insights</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="insights-list">
+                                            <!-- Populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-graph-down"></i> Performance Metrics</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="performanceChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if file_type == 'video' %}
+                        <div class="row mt-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-speedometer2"></i> Engagement Rate Analysis</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="engagementChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dashboard = new Dashboard('{{ file_hash }}', '{{ file_type }}');
+            dashboard.init();
+        });
+    </script>
+</body>
+</html>

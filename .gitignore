@@ -1,8 +1,92 @@
+# System files
 .DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Application specific
 inference/output.mp4
-inference/videoframe_7040.png
+inference/videoframe_*.png
 inference/logo_stats.json
-inference/__pycache__
-app/uploads/*
-app/outputs/*
-app/__pycache__
+inference/__pycache__/
+frontend/static/uploads/*
+frontend/static/results/*
+frontend/__pycache__/
+backend/**/__pycache__/
+tools/__pycache__/
+
+# Keep these directories with .gitkeep
+!app/static/uploads/.gitkeep
+!app/static/results/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Medias
+output-1.mp4
+output-5.mp4
+output.mp4
+
+# Config files
+config.ini
+
+# Training data
+train/ready-training

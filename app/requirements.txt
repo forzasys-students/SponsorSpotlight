@@ -1,7 +1,0 @@
-Flask
-flask-socketio
-torch
-ultralytics
-opencv-python
-numpy
-setuptools

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SponsorSpotlight - Logo Detection</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">SponsorSpotlight</a>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0">Logo Detection</h2>
+                    </div>
+                    <div class="card-body">
+                        {% with messages = get_flashed_messages() %}
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-danger">{{ message }}</div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <p class="lead">Upload an image or video to detect brand logos.</p>
+                        
+                        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-4">
+                            <div id="fileSection" class="disable-wrapper mb-3">
+                                <label for="file" class="form-label">Select File</label>
+                                <input type="file" class="form-control" id="file" name="file" accept="image/*,video/*">
+                                <div class="form-text">Supported formats: JPG, PNG, GIF, MP4, AVI, MOV, WEBM</div>
+                                <div class="d-grid gap-2 mt-3">
+                                    <button type="submit" id="uploadBtn" class="btn btn-primary">Upload & Process</button>
+                                </div>
+                            </div>
+
+                            <div id="urlSection" class="disable-wrapper">
+                                <div class="mb-3">
+                                    <label for="urlInput" class="form-label">Or paste a video/image URL (m3u8 supported)</label>
+                                    <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/stream.m3u8">
+                                    <div class="form-text">We’ll cache by URL to reuse past results.</div>
+                                </div>
+                                <div class="mb-3 d-none" id="previewContainer">
+                                    <label class="form-label">Preview</label>
+                                    <div class="text-center">
+                                        <img id="urlPreview" src="" alt="Preview" class="img-fluid rounded border" />
+                                    </div>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="button" id="processUrlBtn" class="btn btn-secondary">Process URL</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="mb-0">About SponsorSpotlight</h3>
+                    </div>
+                    <div class="card-body">
+                        <p>SponsorSpotlight uses advanced AI to detect and track brand logos in images and videos. The system can:</p>
+                        <ul>
+                            <li>Identify over 600 different brand logos</li>
+                            <li>Track logo exposure time in videos</li>
+                            <li>Generate detailed statistics on logo visibility</li>
+                            <li>Process both local files and video streams</li>
+                        </ul>
+                        <p>Perfect for analyzing brand exposure in sports broadcasts, events, and media content.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-dark text-white mt-5 py-3">
+        <div class="container text-center">
+            <p class="mb-0">&copy; 2025 SponsorSpotlight</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
