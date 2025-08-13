@@ -9,6 +9,7 @@ import copy
 from backend.agent.tools.analysis_tool import analyze_video
 from backend.agent.tools.find_clip_tool import find_best_clip
 from backend.agent.tools.create_clip_tool import create_video_clip
+from backend.agent.tools.create_brand_clip_tool import create_brand_specific_clip
 from backend.agent.tools.caption_tool import generate_share_caption
 from backend.agent.tools.share_tool import share_on_instagram
 from backend.agent.tools.metrics_tool import rank_brands
@@ -26,6 +27,7 @@ class AgentGraph:
             analyze_video,
             find_best_clip,
             create_video_clip,
+            create_brand_specific_clip,
             generate_share_caption,
             share_on_instagram,
             rank_brands,
@@ -76,7 +78,7 @@ class AgentGraph:
             "- Normalize brand names: match case-insensitively and ignore trailing words like 'logo' or 'brand'.",
             "- Prefer selecting a brand from the available list when possible.",
             "- If user specifies a duration in natural language (e.g., 'four seconds'), convert it to seconds.",
-            "- For 'create a N-second video with BRAND' requests: (1) find_best_clip for BRAND, (2) create_video_clip with end_time = start_time + N.",
+            "- For 'create a N-second video with BRAND' requests: (1) find_best_clip for BRAND, (2) prefer create_brand_specific_clip(brand_name, start_time, end_time, file_info) to annotate only that brand; fallback to create_video_clip if needed.",
             "- If duration is not provided, default to 10 seconds.",
             "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
             "- For ranking questions (exposure percentage, detections, frames, time, coverage variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",

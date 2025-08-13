@@ -295,11 +295,15 @@ def agent_query(file_hash):
 
     # Prepare file info for the agent (include video metadata for precise FPS)
     video_metadata = stats_data.get('video_metadata') or stats_data.get('video_meta') or {}
+    frame_detections_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'frame_detections.jsonl')
+    raw_video_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'raw.mp4')
     file_info = {
         'stats_data': stats_data,
         'timeline_stats_data': timeline_stats_data,
         'video_path': video_path,
         'video_metadata': video_metadata,
+        'frame_detections_path': frame_detections_path,
+        'raw_video_path': raw_video_path,
     }
 
     from backend.agent.router import AgentRouter
