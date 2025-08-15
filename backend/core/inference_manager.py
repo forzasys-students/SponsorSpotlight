@@ -317,7 +317,10 @@ class InferenceManager:
             # Prominence accumulators (MVP)
             "sum_prominence_present": 0.0,
             "max_prominence": 0.0,
-            "high_prominence_time": 0.0
+            "high_prominence_time": 0.0,
+            # Share of Voice accumulators
+            "sum_share_of_voice_present": 0.0,
+            "solo_time": 0.0
         })
         frame_by_frame_detections = defaultdict(list)
         # Per-frame coverage series: percentage per frame for each logo (0 when absent)
@@ -353,6 +356,9 @@ class InferenceManager:
             per_frame_detections = []
             # Per-frame per-brand prominence (max over detections of that brand)
             per_brand_prominence_frame = defaultdict(float)
+            # Track unique brands per frame for Share of Voice calculation
+            unique_brands_in_frame = set()
+            
             for result in results:
                 if result.obb is None:
                     continue
@@ -362,6 +368,8 @@ class InferenceManager:
                     cls = int(obb.cls[i])
                     class_name = self.class_names[cls]
                     logos_in_frame[class_name] += 1
+                    # Track unique brands for Share of Voice
+                    unique_brands_in_frame.add(self.logo_groups.get(class_name, class_name))
 
                     # Compute oriented bounding box area in pixels
                     if hasattr(obb, 'xyxyxyxy'):
@@ -455,6 +463,18 @@ class InferenceManager:
                         aggregated_stats[main_logo]["max_prominence"] = s
                     if s >= prominence_high_threshold:
                         aggregated_stats[main_logo]["high_prominence_time"] += frame_time
+
+                # Calculate Share of Voice for this brand in this frame
+                if main_logo in unique_brands_in_frame:
+                    # Count other unique brands in this frame (excluding current brand)
+                    other_brands_count = len(unique_brands_in_frame - {main_logo})
+                    # Share of Voice = 1 / (1 + number_of_competitors)
+                    share_of_voice = 1.0 / (1.0 + other_brands_count)
+                    aggregated_stats[main_logo]["sum_share_of_voice_present"] += share_of_voice
+                    
+                    # Track solo time (when brand appears alone)
+                    if other_brands_count == 0:
+                        aggregated_stats[main_logo]["solo_time"] += frame_time
 
             # For logos not present in this frame, append 0 to keep series aligned
             for lg in list(coverage_per_frame.keys()):
@@ -690,7 +710,10 @@ class InferenceManager:
             # Prominence accumulators (MVP)
             "sum_prominence_present": 0.0,
             "max_prominence": 0.0,
-            "high_prominence_time": 0.0
+            "high_prominence_time": 0.0,
+            # Share of Voice accumulators
+            "sum_share_of_voice_present": 0.0,
+            "solo_time": 0.0
         })
         frame_by_frame_detections = defaultdict(list)
         coverage_per_frame = defaultdict(list)
@@ -725,6 +748,8 @@ class InferenceManager:
             per_frame_detections = []
             # Per-frame per-brand prominence (max over detections of that brand)
             per_brand_prominence_frame = defaultdict(float)
+            # Track unique brands per frame for Share of Voice calculation
+            unique_brands_in_frame = set()
 
             for result in results:
                 if result.obb is None:
@@ -734,6 +759,8 @@ class InferenceManager:
                     cls = int(obb.cls[i])
                     class_name = self.class_names[cls]
                     logos_in_frame[class_name] += 1
+                    # Track unique brands for Share of Voice
+                    unique_brands_in_frame.add(self.logo_groups.get(class_name, class_name))
                     if hasattr(obb, 'xyxyxyxy'):
                         polygon = obb.xyxyxyxy[i]
                         if hasattr(polygon, 'cpu'):
@@ -815,6 +842,18 @@ class InferenceManager:
                     if s >= prominence_high_threshold:
                         aggregated_stats[main_logo]["high_prominence_time"] += frame_time
 
+                # Calculate Share of Voice for this brand in this frame
+                if main_logo in unique_brands_in_frame:
+                    # Count other unique brands in this frame (excluding current brand)
+                    other_brands_count = len(unique_brands_in_frame - {main_logo})
+                    # Share of Voice = 1 / (1 + number_of_competitors)
+                    share_of_voice = 1.0 / (1.0 + other_brands_count)
+                    aggregated_stats[main_logo]["sum_share_of_voice_present"] += share_of_voice
+                    
+                    # Track solo time (when brand appears alone)
+                    if other_brands_count == 0:
+                        aggregated_stats[main_logo]["solo_time"] += frame_time
+
             for lg in list(coverage_per_frame.keys()):
                 if lg not in present_logos_this_frame:
                     while len(coverage_per_frame[lg]) < (frame_count - 1):
@@ -880,10 +919,14 @@ class InferenceManager:
             sum_prom_present = stats.get("sum_prominence_present", 0.0)
             max_prom = stats.get("max_prominence", 0.0)
             high_prom_time = stats.get("high_prominence_time", 0.0)
+            sum_sov_present = stats.get("sum_share_of_voice_present", 0.0)
+            solo_time = stats.get("solo_time", 0.0)
             percentage_time = (time_value / total_video_time * 100) if total_video_time > 0 else 0
             avg_cov_present = (sum_cov_present / frames_present * 100) if frames_present > 0 else 0.0
             avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
             avg_prom_present = (sum_prom_present / frames_present * 100) if frames_present > 0 else 0.0
+            avg_sov_present = (sum_sov_present / frames_present * 100) if frames_present > 0 else 0.0
+            solo_percentage = (solo_time / time_value * 100) if time_value > 0 else 0.0
 
             # Filter out brands with less than 20 detections to reduce false positives
             if stats["detections"] >= 20:
@@ -897,7 +940,10 @@ class InferenceManager:
                     "coverage_max": round(max_cov * 100, 2),
                     "prominence_avg_present": round(avg_prom_present, 2),
                     "prominence_max": round(max_prom * 100, 2),
-                    "prominence_high_time": round(high_prom_time, 2)
+                    "prominence_high_time": round(high_prom_time, 2),
+                    "share_of_voice_avg_present": round(avg_sov_present, 2),
+                    "share_of_voice_solo_time": round(solo_time, 2),
+                    "share_of_voice_solo_percentage": round(solo_percentage, 2)
                 }
 
         output_data = {

@@ -197,6 +197,8 @@ class Dashboard {
                 const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
                 const promAvg = (logoData.prominence_avg_present || 0).toFixed(2);
                 const promMax = (logoData.prominence_max || 0).toFixed(2);
+                const sovAvg = (logoData.share_of_voice_avg_present || 0).toFixed(2);
+                const soloPct = (logoData.share_of_voice_solo_percentage || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
@@ -207,6 +209,8 @@ class Dashboard {
                     <td>${maxCoverage}%</td>
                     <td>${promAvg}</td>
                     <td>${promMax}</td>
+                    <td>${sovAvg}%</td>
+                    <td>${soloPct}%</td>
                 `;
             }
 
@@ -290,6 +294,12 @@ class Dashboard {
                     case 'prominence_max':
                         return isDesc ? (dataB.prominence_max || 0) - (dataA.prominence_max || 0)
                                       : (dataA.prominence_max || 0) - (dataB.prominence_max || 0);
+                    case 'share_of_voice_avg_present':
+                        return isDesc ? (dataB.share_of_voice_avg_present || 0) - (dataA.share_of_voice_avg_present || 0)
+                                      : (dataA.share_of_voice_avg_present || 0) - (dataB.share_of_voice_avg_present || 0);
+                    case 'share_of_voice_solo_percentage':
+                        return isDesc ? (dataB.share_of_voice_solo_percentage || 0) - (dataA.share_of_voice_solo_percentage || 0)
+                                      : (dataA.share_of_voice_solo_percentage || 0) - (dataB.share_of_voice_solo_percentage || 0);
                     default:
                         return 0;
                 }
@@ -322,6 +332,8 @@ class Dashboard {
                 const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
                 const promAvg = (logoData.prominence_avg_present || 0).toFixed(2);
                 const promMax = (logoData.prominence_max || 0).toFixed(2);
+                const sovAvg = (logoData.share_of_voice_avg_present || 0).toFixed(2);
+                const soloPct = (logoData.share_of_voice_solo_percentage || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
@@ -332,6 +344,8 @@ class Dashboard {
                     <td>${maxCoverage}%</td>
                     <td>${promAvg}</td>
                     <td>${promMax}</td>
+                    <td>${sovAvg}%</td>
+                    <td>${soloPct}%</td>
                 `;
             }
 
