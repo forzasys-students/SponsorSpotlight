@@ -7,6 +7,7 @@ import numpy as np
 import json
 import subprocess
 import requests
+import math
 from urllib.parse import urljoin
 from collections import defaultdict, Counter
 import time
@@ -312,7 +313,11 @@ class InferenceManager:
             "detections": 0,
             "sum_coverage_present": 0.0,
             "max_coverage": 0.0,
-            "sum_area_present_px": 0.0
+            "sum_area_present_px": 0.0,
+            # Prominence accumulators (MVP)
+            "sum_prominence_present": 0.0,
+            "max_prominence": 0.0,
+            "high_prominence_time": 0.0
         })
         frame_by_frame_detections = defaultdict(list)
         # Per-frame coverage series: percentage per frame for each logo (0 when absent)
@@ -346,6 +351,8 @@ class InferenceManager:
 
             # Count logo detections in the frame and compute coverage areas
             per_frame_detections = []
+            # Per-frame per-brand prominence (max over detections of that brand)
+            per_brand_prominence_frame = defaultdict(float)
             for result in results:
                 if result.obb is None:
                     continue
@@ -378,6 +385,26 @@ class InferenceManager:
                             main_logo_for_area = self.logo_groups.get(class_name, class_name)
                             logo_area_pixels_in_frame[main_logo_for_area] += area_px
 
+                            # Compute MVP prominence score for this detection (center proximity + size)
+                            try:
+                                W = float(frame.shape[1])
+                                H = float(frame.shape[0])
+                                cx = float(points[:, 0].mean())
+                                cy = float(points[:, 1].mean())
+                                area_ratio = max(0.0, min(1.0, area_px / (W * H) if (W > 0 and H > 0) else 0.0))
+                                sigma_x = 0.3 * W
+                                sigma_y = 0.3 * H
+                                if sigma_x <= 0 or sigma_y <= 0:
+                                    p_center = 0.0
+                                else:
+                                    p_center = math.exp(-(((cx - (W / 2.0)) ** 2) / (2.0 * (sigma_x ** 2)) + ((cy - (H / 2.0)) ** 2) / (2.0 * (sigma_y ** 2))))
+                                p_size = math.sqrt(area_ratio)
+                                prominence_score = 0.6 * p_center + 0.4 * p_size
+                                if prominence_score > per_brand_prominence_frame[main_logo_for_area]:
+                                    per_brand_prominence_frame[main_logo_for_area] = prominence_score
+                            except Exception:
+                                pass
+
                         # Collect detection polygon/bbox for advanced overlays
                         polygon_list = points.tolist()
                         xs = [p[0] for p in polygon_list]
@@ -400,6 +427,7 @@ class InferenceManager:
             frame_area = float(frame.shape[0] * frame.shape[1]) if frame is not None else 0.0
             # Prepare to record per-frame coverage series
             present_logos_this_frame = set()
+            prominence_high_threshold = 0.6
             for main_logo in main_logos_in_frame:
                 aggregated_stats[main_logo]["frames"] += 1
                 aggregated_stats[main_logo]["time"] += frame_time
@@ -418,6 +446,15 @@ class InferenceManager:
                         coverage_per_frame[main_logo].append(0.0)
                     coverage_per_frame[main_logo].append(round(coverage_ratio * 100.0, 4))
                     present_logos_this_frame.add(main_logo)
+
+                # Accumulate prominence for this brand in this frame if computed
+                if main_logo in per_brand_prominence_frame:
+                    s = float(per_brand_prominence_frame.get(main_logo, 0.0))
+                    aggregated_stats[main_logo]["sum_prominence_present"] += s
+                    if s > aggregated_stats[main_logo]["max_prominence"]:
+                        aggregated_stats[main_logo]["max_prominence"] = s
+                    if s >= prominence_high_threshold:
+                        aggregated_stats[main_logo]["high_prominence_time"] += frame_time
 
             # For logos not present in this frame, append 0 to keep series aligned
             for lg in list(coverage_per_frame.keys()):
@@ -481,20 +518,29 @@ class InferenceManager:
             frames_present = stats["frames"]
             sum_cov_present = stats.get("sum_coverage_present", 0.0)
             max_cov = stats.get("max_coverage", 0.0)
+            sum_prom_present = stats.get("sum_prominence_present", 0.0)
+            max_prom = stats.get("max_prominence", 0.0)
+            high_prom_time = stats.get("high_prominence_time", 0.0)
 
             percentage_time = (time_value / total_video_time * 100) if total_video_time > 0 else 0
             avg_cov_present = (sum_cov_present / frames_present * 100) if frames_present > 0 else 0.0
             avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
+            avg_prom_present = (sum_prom_present / frames_present * 100) if frames_present > 0 else 0.0
 
-            final_stats[logo] = {
-                "frames": frames_present,
-                "time": min(time_value, total_video_time),
-                "detections": stats["detections"],
-                "percentage": round(percentage_time, 2),
-                "coverage_avg_present": round(avg_cov_present, 2),
-                "coverage_avg_overall": round(avg_cov_overall, 2),
-                "coverage_max": round(max_cov * 100, 2)
-            }
+            # Filter out brands with less than 20 detections to reduce false positives
+            if stats["detections"] >= 20:
+                final_stats[logo] = {
+                    "frames": frames_present,
+                    "time": min(time_value, total_video_time),
+                    "detections": stats["detections"],
+                    "percentage": round(percentage_time, 2),
+                    "coverage_avg_present": round(avg_cov_present, 2),
+                    "coverage_avg_overall": round(avg_cov_overall, 2),
+                    "coverage_max": round(max_cov * 100, 2),
+                    "prominence_avg_present": round(avg_prom_present, 2),
+                    "prominence_max": round(max_prom * 100, 2),
+                    "prominence_high_time": round(high_prom_time, 2)
+                }
 
         # Prepare final JSON output with metadata
         output_data = {
@@ -634,7 +680,18 @@ class InferenceManager:
         frame_count = 0
 
         # Stats with coverage fields (mirror file video processing)
-        aggregated_stats = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "sum_coverage_present": 0.0, "max_coverage": 0.0, "sum_area_present_px": 0.0})
+        aggregated_stats = defaultdict(lambda: {
+            "frames": 0,
+            "time": 0.0,
+            "detections": 0,
+            "sum_coverage_present": 0.0,
+            "max_coverage": 0.0,
+            "sum_area_present_px": 0.0,
+            # Prominence accumulators (MVP)
+            "sum_prominence_present": 0.0,
+            "max_prominence": 0.0,
+            "high_prominence_time": 0.0
+        })
         frame_by_frame_detections = defaultdict(list)
         coverage_per_frame = defaultdict(list)
 
@@ -666,6 +723,8 @@ class InferenceManager:
             main_logos_in_frame = set()
             logo_area_pixels_in_frame = defaultdict(float)
             per_frame_detections = []
+            # Per-frame per-brand prominence (max over detections of that brand)
+            per_brand_prominence_frame = defaultdict(float)
 
             for result in results:
                 if result.obb is None:
@@ -690,6 +749,25 @@ class InferenceManager:
                         if area_px > 0:
                             main_logo_for_area = self.logo_groups.get(class_name, class_name)
                             logo_area_pixels_in_frame[main_logo_for_area] += area_px
+                            # Compute MVP prominence score for this detection
+                            try:
+                                W = float(frame.shape[1])
+                                H = float(frame.shape[0])
+                                cx = float(points[:, 0].mean())
+                                cy = float(points[:, 1].mean())
+                                area_ratio = max(0.0, min(1.0, area_px / (W * H) if (W > 0 and H > 0) else 0.0))
+                                sigma_x = 0.3 * W
+                                sigma_y = 0.3 * H
+                                if sigma_x <= 0 or sigma_y <= 0:
+                                    p_center = 0.0
+                                else:
+                                    p_center = math.exp(-(((cx - (W / 2.0)) ** 2) / (2.0 * (sigma_x ** 2)) + ((cy - (H / 2.0)) ** 2) / (2.0 * (sigma_y ** 2))))
+                                p_size = math.sqrt(area_ratio)
+                                prominence_score = 0.6 * p_center + 0.4 * p_size
+                                if prominence_score > per_brand_prominence_frame[main_logo_for_area]:
+                                    per_brand_prominence_frame[main_logo_for_area] = prominence_score
+                            except Exception:
+                                pass
                         # Collect polygon/bbox for overlays
                         try:
                             poly_list = points.tolist()
@@ -711,6 +789,7 @@ class InferenceManager:
 
             frame_area = float(frame.shape[0] * frame.shape[1]) if frame is not None else 0.0
             present_logos_this_frame = set()
+            prominence_high_threshold = 0.6
             for main_logo in main_logos_in_frame:
                 aggregated_stats[main_logo]["frames"] += 1
                 aggregated_stats[main_logo]["time"] += frame_time
@@ -726,6 +805,15 @@ class InferenceManager:
                         coverage_per_frame[main_logo].append(0.0)
                     coverage_per_frame[main_logo].append(round(coverage_ratio * 100.0, 4))
                     present_logos_this_frame.add(main_logo)
+
+                # Accumulate prominence per frame for this brand if available
+                if main_logo in per_brand_prominence_frame:
+                    s = float(per_brand_prominence_frame.get(main_logo, 0.0))
+                    aggregated_stats[main_logo]["sum_prominence_present"] += s
+                    if s > aggregated_stats[main_logo]["max_prominence"]:
+                        aggregated_stats[main_logo]["max_prominence"] = s
+                    if s >= prominence_high_threshold:
+                        aggregated_stats[main_logo]["high_prominence_time"] += frame_time
 
             for lg in list(coverage_per_frame.keys()):
                 if lg not in present_logos_this_frame:
@@ -789,18 +877,28 @@ class InferenceManager:
             frames_present = stats["frames"]
             sum_cov_present = stats.get("sum_coverage_present", 0.0)
             max_cov = stats.get("max_coverage", 0.0)
+            sum_prom_present = stats.get("sum_prominence_present", 0.0)
+            max_prom = stats.get("max_prominence", 0.0)
+            high_prom_time = stats.get("high_prominence_time", 0.0)
             percentage_time = (time_value / total_video_time * 100) if total_video_time > 0 else 0
             avg_cov_present = (sum_cov_present / frames_present * 100) if frames_present > 0 else 0.0
             avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
-            final_stats[logo] = {
-                "frames": frames_present,
-                "time": min(time_value, total_video_time),
-                "detections": stats["detections"],
-                "percentage": round(percentage_time, 2),
-                "coverage_avg_present": round(avg_cov_present, 2),
-                "coverage_avg_overall": round(avg_cov_overall, 2),
-                "coverage_max": round(max_cov * 100, 2)
-            }
+            avg_prom_present = (sum_prom_present / frames_present * 100) if frames_present > 0 else 0.0
+
+            # Filter out brands with less than 20 detections to reduce false positives
+            if stats["detections"] >= 20:
+                final_stats[logo] = {
+                    "frames": frames_present,
+                    "time": min(time_value, total_video_time),
+                    "detections": stats["detections"],
+                    "percentage": round(percentage_time, 2),
+                    "coverage_avg_present": round(avg_cov_present, 2),
+                    "coverage_avg_overall": round(avg_cov_overall, 2),
+                    "coverage_max": round(max_cov * 100, 2),
+                    "prominence_avg_present": round(avg_prom_present, 2),
+                    "prominence_max": round(max_prom * 100, 2),
+                    "prominence_high_time": round(high_prom_time, 2)
+                }
 
         output_data = {
             "video_metadata": {

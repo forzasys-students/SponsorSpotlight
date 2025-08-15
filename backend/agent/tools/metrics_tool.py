@@ -8,10 +8,12 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 
 	Parameters:
 	- file_info: includes stats_data.logo_stats
-	- metric (enum): one of [percentage, detections, frames, time, coverage_avg_present, coverage_avg_overall, coverage_max]
+	- metric (enum): one of [percentage, detections, frames, time, coverage_avg_present, coverage_avg_overall, coverage_max, prominence_avg_present, prominence_max, prominence_high_time]
 	         Synonyms: exposure -> percentage, exposure_percentage -> percentage,
 	                   coverage -> coverage_avg_present, present_coverage -> coverage_avg_present,
-	                   overall_coverage -> coverage_avg_overall, max_coverage -> coverage_max
+	                   overall_coverage -> coverage_avg_overall, max_coverage -> coverage_max,
+	                   prominence -> prominence_avg_present, prominence_avg -> prominence_avg_present,
+	                   max_prominence -> prominence_max
 	- top_n: integer (1..50), default 3
 	- direction: 'desc' or 'asc', default 'desc'
 
@@ -45,11 +47,15 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 		'overall_coverage': 'coverage_avg_overall',
 		'present_coverage': 'coverage_avg_present',
 		'coverage': 'coverage_avg_present',
+		'prominence': 'prominence_avg_present',
+		'prominence_avg': 'prominence_avg_present',
+		'max_prominence': 'prominence_max',
 	}
 	metric_name = synonyms.get(metric_raw, metric_raw)
 	allowed = {
 		'percentage', 'detections', 'frames', 'time',
-		'coverage_avg_present', 'coverage_avg_overall', 'coverage_max'
+		'coverage_avg_present', 'coverage_avg_overall', 'coverage_max',
+		'prominence_avg_present', 'prominence_max', 'prominence_high_time'
 	}
 	if metric_name not in allowed:
 		return {
@@ -87,6 +93,8 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 
 	def fmt(metric_key: str, val: float) -> str:
 		if metric_key == 'percentage':
+			return f"{val:.2f}%"
+		if metric_key in {'coverage_avg_present', 'coverage_avg_overall', 'coverage_max'}:
 			return f"{val:.2f}%"
 		return f"{val:.2f}"
 

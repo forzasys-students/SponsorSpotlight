@@ -195,6 +195,8 @@ class Dashboard {
                     (logoData.detections / logoData.frames).toFixed(2) : '0.00';
                 const avgCoverage = (logoData.coverage_avg_present || 0).toFixed(2);
                 const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
+                const promAvg = (logoData.prominence_avg_present || 0).toFixed(2);
+                const promMax = (logoData.prominence_max || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
@@ -203,6 +205,8 @@ class Dashboard {
                     <td>${avgPerFrame}</td>
                     <td>${avgCoverage}%</td>
                     <td>${maxCoverage}%</td>
+                    <td>${promAvg}</td>
+                    <td>${promMax}</td>
                 `;
             }
 
@@ -210,6 +214,12 @@ class Dashboard {
 
             return row;
         }).join('');
+
+        // Initialize Bootstrap tooltips for the table headers
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     }
 
     calculatePerformance(logoData) {
@@ -274,6 +284,12 @@ class Dashboard {
                     case 'max_coverage':
                         return isDesc ? (dataB.coverage_max || 0) - (dataA.coverage_max || 0)
                                       : (dataA.coverage_max || 0) - (dataB.coverage_max || 0);
+                    case 'prominence_avg_present':
+                        return isDesc ? (dataB.prominence_avg_present || 0) - (dataA.prominence_avg_present || 0)
+                                      : (dataA.prominence_avg_present || 0) - (dataB.prominence_avg_present || 0);
+                    case 'prominence_max':
+                        return isDesc ? (dataB.prominence_max || 0) - (dataA.prominence_max || 0)
+                                      : (dataA.prominence_max || 0) - (dataB.prominence_max || 0);
                     default:
                         return 0;
                 }
@@ -304,6 +320,8 @@ class Dashboard {
                     (logoData.detections / logoData.frames).toFixed(2) : '0.00';
                 const avgCoverage = (logoData.coverage_avg_present || 0).toFixed(2);
                 const maxCoverage = (logoData.coverage_max || 0).toFixed(2);
+                const promAvg = (logoData.prominence_avg_present || 0).toFixed(2);
+                const promMax = (logoData.prominence_max || 0).toFixed(2);
                 
                 row += `
                     <td>${logoData.frames || 0}</td>
@@ -312,6 +330,8 @@ class Dashboard {
                     <td>${avgPerFrame}</td>
                     <td>${avgCoverage}%</td>
                     <td>${maxCoverage}%</td>
+                    <td>${promAvg}</td>
+                    <td>${promMax}</td>
                 `;
             }
 
@@ -319,6 +339,12 @@ class Dashboard {
 
             return row;
         }).join('');
+
+        // Re-initialize Bootstrap tooltips after table update
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     }
 
     initializeInsights() {

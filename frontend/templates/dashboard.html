@@ -158,6 +158,8 @@
                                     <option value="frames">Sort by Frames</option>
                                      <option value="coverage">Sort by Avg. Coverage</option>
                                      <option value="max_coverage">Sort by Max Coverage</option>
+                                     <option value="prominence_avg_present">Sort by Prominence (avg)</option>
+                                     <option value="prominence_max">Sort by Prominence (max)</option>
                                     {% endif %}
                                     <option value="name">Sort by Name</option>
                                 </select>
@@ -173,21 +175,24 @@
                         <div class="card">
                             <div class="card-header">
                                 <h5><i class="bi bi-table"></i> Detailed Logo Analysis</h5>
+                                <small class="text-muted">All prominence values are out of 100</small>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table class="table table-hover" id="detailedTable">
                                         <thead class="table-dark">
                                             <tr>
-                                                <th>Logo</th>
-                                                <th>Detections</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Brand/logo name">Logo</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Total number of logo detections across all frames">Detections</th>
                                                 {% if file_type == 'video' %}
-                                                <th>Frames</th>
-                                                <th>Time (s)</th>
-                                                <th>Percentage</th>
-                                                <th>Avg. per Frame</th>
-                                                 <th>Avg. Coverage (%)</th>
-                                                 <th>Max Coverage (%)</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Number of frames where this logo appears">Frames</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Total time in seconds this logo is visible">Time (s)</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Percentage of total video duration this logo appears">Percentage</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average detections per frame when logo is present">Avg. per Frame</th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average percentage of frame area covered by logo when present">Avg. Coverage (%)</th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Maximum percentage of frame area covered by logo in any single frame">Max Coverage (%)</th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average prominence score (0-100) based on logo position and size when present. Higher = more eye-catching">Prominence (avg)</th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Highest prominence score (0-100) achieved in any single frame. Shows peak visibility moment">Prominence (max)</th>
                                                 {% endif %}
                                             </tr>
                                         </thead>
