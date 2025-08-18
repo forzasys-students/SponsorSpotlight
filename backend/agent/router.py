@@ -6,6 +6,10 @@ class AgentRouter:
         """
         Routes the user's query to the LangGraph agent.
         """
+        try:
+            print(f"[AgentRouter] Incoming query: {query}")
+        except Exception:
+            pass
         # The LLM doesn't need the full data blob, just the query.
         # The tools will access the data from the state.
         inputs = {

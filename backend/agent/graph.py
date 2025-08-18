@@ -87,7 +87,9 @@ class AgentGraph:
             "- For 'most exposure' requests, AVOID find_best_clip/create_video_clip; the montage tool is the correct path. If available coverage is shorter than the target, shorter output is acceptable.",
             "- If the requested brand is not in the available list, ask the user to pick one, suggesting close matches.",
             "- When the UI confirms 'Share to Instagram' and provides a clip path, generate a caption without asking for times (use a generic yet relevant caption) and then share immediately.",
-            "- For ranking questions (exposure percentage, detections, frames, time, coverage variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",
+            "- For ranking questions (exposure percentage, detections, frames, time, coverage variants, prominence variants, share of voice variants), call rank_brands(file_info, metric='<metric>', top_n=<N>).",
+            "- Supported metrics include: percentage, detections, frames, time, coverage_avg_present, coverage_avg_overall, coverage_max, prominence_avg_present, prominence_max, share_of_voice_avg_present, share_of_voice_solo_time, share_of_voice_solo_percentage.",
+            "- Metric synonyms: 'share of voice'/'share-of-voice'/'sov' -> share_of_voice_avg_present; 'prominence' -> prominence_avg_present; 'coverage' -> coverage_avg_present.",
             "- For ambiguous 'coverage' metric, default to 'coverage_avg_present' and note the choice in your response.",
             "- When rank_brands returns structured JSON, present a concise, readable list (do not hallucinate additional brands).",
             "- Also include the raw JSON on a separate line prefixed exactly with 'RANK_JSON: ' so the UI can render a table (e.g., RANK_JSON: { ... }).",
@@ -98,8 +100,18 @@ class AgentGraph:
 
         system_prompt = "\n".join(guidance_lines)
 
+        try:
+            print("[AgentGraph] System guidance built. Tools available:", [t.name for t in self.tools])
+            print("[AgentGraph] Last user message:", getattr(messages[-1], 'content', ''))
+        except Exception:
+            pass
+
         messages_with_system = [SystemMessage(content=system_prompt)] + list(messages)
         response = self.model.invoke(messages_with_system)
+        try:
+            print("[AgentGraph] Model tool_calls:", getattr(response, 'tool_calls', None))
+        except Exception:
+            pass
         # Hard nudge: if user asked for "most exposure" or "highest coverage", suggest montage tool explicitly
         # This hint increases the chance the model selects create_brand_highlight_montage.
         return {"messages": [response]}
@@ -118,6 +130,10 @@ class AgentGraph:
                 
                 # Use a copy to avoid modifying the state history
                 kwargs = copy.deepcopy(call['args'])
+                try:
+                    print(f"[AgentGraph] Invoking tool: {tool_name} with args: {kwargs}")
+                except Exception:
+                    pass
 
                 # Inject state data directly into the tool call
                 sig = inspect.signature(tool_to_call.func)
