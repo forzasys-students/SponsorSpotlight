@@ -42,6 +42,10 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 
 	# Normalize metric name
 	metric_raw = (metric or 'percentage').strip().lower()
+	try:
+		print(f"[rank_brands] Incoming metric='{metric}' raw='{metric_raw}'")
+	except Exception:
+		pass
 	synonyms = {
 		'exposure': 'percentage',
 		'exposure_percentage': 'percentage',
@@ -56,8 +60,19 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 		'sov': 'share_of_voice_avg_present',
 		'solo_time': 'share_of_voice_solo_time',
 		'solo_percentage': 'share_of_voice_solo_percentage',
+		# Explicit space/hyphen variants
+		'share of voice': 'share_of_voice_avg_present',
+		'average share of voice': 'share_of_voice_avg_present',
+		'avg share of voice': 'share_of_voice_avg_present',
+		'share-of-voice': 'share_of_voice_avg_present',
 	}
-	metric_name = synonyms.get(metric_raw, metric_raw)
+	# Also normalize to underscores to tolerate spaces and hyphens
+	metric_norm = metric_raw.replace(' ', '_').replace('-', '_')
+	metric_name = synonyms.get(metric_raw) or synonyms.get(metric_norm) or metric_norm
+	try:
+		print(f"[rank_brands] Resolved metric_name='{metric_name}' from raw='{metric_raw}' norm='{metric_norm}'")
+	except Exception:
+		pass
 	allowed = {
 		'percentage', 'detections', 'frames', 'time',
 		'coverage_avg_present', 'coverage_avg_overall', 'coverage_max',
@@ -65,6 +80,10 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 		'share_of_voice_avg_present', 'share_of_voice_solo_time', 'share_of_voice_solo_percentage'
 	}
 	if metric_name not in allowed:
+		try:
+			print(f"[rank_brands] Unsupported metric_name='{metric_name}'. Allowed={sorted(list(allowed))}")
+		except Exception:
+			pass
 		return {
 			"metric": metric_name,
 			"direction": direction,
@@ -79,16 +98,10 @@ def rank_brands(file_info: dict, metric: str = "percentage", top_n: int = 3, dir
 		value = data.get(metric_name)
 		if isinstance(value, (int, float)):
 			rows.append((brand, float(value)))
-
-	if not rows:
-		return {
-			"metric": metric_name,
-			"direction": direction,
-			"top_n": max(1, min(int(top_n or 3), 50)),
-			"total_brands_considered": 0,
-			"items": [],
-			"message": f"No numeric values found for metric '{metric_name}'."
-		}
+	try:
+		print(f"[rank_brands] Rows considered={len(rows)} for metric='{metric_name}'")
+	except Exception:
+		pass
 
 	# Stabilize direction and selection bounds
 	dir_lower = str(direction or 'desc').lower()
