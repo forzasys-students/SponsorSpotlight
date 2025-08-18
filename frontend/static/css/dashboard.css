@@ -329,3 +329,91 @@
 #agent-video-container .card {
 	margin-top: 0.5rem;
 }
+
+/* Prominence rich popover and modal */
+.metric-explainer,
+.prominence-explainer {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+.metric-explainer .info-trigger,
+.prominence-explainer .info-trigger {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+.rich-popover {
+    position: absolute;
+    z-index: 1055;
+    width: 320px;
+    max-width: calc(100vw - 32px);
+    background: #111;
+    color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    padding: 12px;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+}
+.popover-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+.explain-vid {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+}
+.explain-modal {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(0,0,0,0.55);
+}
+.explain-modal[hidden] { display: none; }
+.explain-modal .modal-inner {
+    width: min(720px, 92vw);
+    background: #fff;
+    color: #111;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
+/* Coverage explainer shares .metric-explainer styles */
+.coverage-explainer {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+}
+.coverage-explainer .info-trigger {
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+.explain-img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+    .explain-vid { display: none; }
+    .popover-content .media {
+        background: #000 url('/static/results/prominence-poster.jpg') center/cover no-repeat;
+        border-radius: 8px;
+        height: 180px;
+    }
+}

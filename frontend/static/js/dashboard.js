@@ -519,6 +519,9 @@ class Dashboard {
                 this.updateExposureChartType(chartType);
             });
         });
+
+        // Initialize generic metric explainers
+        this.initMetricExplainers();
     }
 
     updateExposureChartType(type) {
@@ -624,13 +627,14 @@ class Dashboard {
             let query = originalQuery;
             if (!query) return;
             this.lastAgentQuery = originalQuery;
-            // Human-in-the-loop share: if the user asked to share, first create the clip only,
-            // then ask for confirmation before sharing.
-            const wantsShare = /\b(share|instagram)\b/i.test(originalQuery);
+            // Human-in-the-loop share: detect explicit share intent, but avoid false positives like "share of voice"
+            const isInstagram = /\binstagram\b/i.test(originalQuery);
+            const isExplicitShareVerb = /\bshare\s+(it|this|on|to)\b/i.test(originalQuery) || /\b(post|publish)\b/i.test(originalQuery);
+            const wantsShare = isInstagram || isExplicitShareVerb;
             if (wantsShare) {
                 this.pendingShare = true;
-                // Remove trailing share clause: variations like ", and share ...", "and share ...", "share it ..."
-                query = originalQuery.replace(/\s*(,?\s*and\s+)?share[\s\S]*$/i, '').trim();
+                // Remove trailing explicit share clause only (not phrases like "share of voice")
+                query = originalQuery.replace(/\s*(,?\s*and\s+)?(?:share\s+(?:it|this|on|to)[\s\S]*|post[\s\S]*|publish[\s\S]*|instagram[\s\S]*)$/i, '').trim();
                 if (!query) query = originalQuery; // fallback safety
             } else {
                 this.pendingShare = false;
@@ -1044,5 +1048,120 @@ class Dashboard {
     showError(message) {
         console.error(message);
         // You could add a toast notification here
+    }
+
+    initMetricExplainers() {
+        try {
+            const modal = document.getElementById('explainer-modal');
+            const modalTitle = modal?.querySelector('#explainer-modal-title');
+            const modalMedia = modal?.querySelector('.explainer-modal-media');
+            const modalCopy = modal?.querySelector('.explainer-modal-copy');
+            const explainers = document.querySelectorAll('.metric-explainer');
+            if (!explainers.length) return;
+
+            explainers.forEach(explainer => {
+                const trigger = explainer.querySelector('.info-trigger');
+                const popoverId = trigger?.getAttribute('aria-controls');
+                const popover = popoverId ? document.getElementById(popoverId) : null;
+                const video = popover?.querySelector('video.explain-vid') || null;
+                const copy = popover?.querySelector('.copy');
+                const learnMore = popover?.querySelector('.learn-more');
+                const title = explainer.getAttribute('data-explainer-title') || trigger?.getAttribute('title') || '';
+                if (!trigger || !popover) return;
+
+                let closeTimer;
+                const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                const show = () => {
+                    clearTimeout(closeTimer);
+                    popover.hidden = false;
+                    trigger.setAttribute('aria-expanded', 'true');
+                    if (video && !prefersReduced) {
+                        if (video.preload !== 'auto') video.preload = 'auto';
+                        video.play().catch(() => {});
+                    }
+                };
+                const hide = () => {
+                    closeTimer = setTimeout(() => {
+                        popover.hidden = true;
+                        trigger.setAttribute('aria-expanded', 'false');
+                        if (video) { video.pause(); video.currentTime = 0; }
+                    }, 150);
+                };
+
+                trigger.addEventListener('mouseenter', show);
+                trigger.addEventListener('mouseleave', hide);
+                popover.addEventListener('mouseenter', () => { clearTimeout(closeTimer); });
+                popover.addEventListener('mouseleave', hide);
+                trigger.addEventListener('focus', show);
+                trigger.addEventListener('blur', hide);
+
+                trigger.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (window.matchMedia('(hover: none)').matches) {
+                        openModal();
+                    } else {
+                        if (popover.hidden) show(); else hide();
+                    }
+                });
+
+                learnMore?.addEventListener('click', (e) => { e.preventDefault(); openModal(); });
+
+                function openModal() {
+                    if (!modal) return;
+                    // Set title
+                    if (modalTitle) modalTitle.textContent = title;
+                    // Build media
+                    if (modalMedia) {
+                        const media = video ? video.cloneNode(true) : (popover?.querySelector('img.explain-img')?.cloneNode(true) || null);
+                        modalMedia.innerHTML = '';
+                        if (media) {
+                            if (media.tagName.toLowerCase() === 'video') {
+                                media.removeAttribute('loop');
+                                media.setAttribute('controls', '');
+                                media.setAttribute('preload', 'metadata');
+                                media.style.width = '100%';
+                                media.style.height = 'auto';
+                            } else if (media.tagName.toLowerCase() === 'img') {
+                                media.style.width = '100%';
+                                media.style.height = 'auto';
+                            }
+                            modalMedia.appendChild(media);
+                            if (media.tagName.toLowerCase() === 'video') {
+                                media.play?.().catch(() => {});
+                            }
+                        }
+                    }
+                    // Copy text
+                    if (modalCopy) {
+                        const text = copy?.textContent || '';
+                        modalCopy.textContent = text;
+                    }
+                    modal.hidden = false;
+                }
+                function closeModal() {
+                    if (!modal) return;
+                    const mv = modal.querySelector('video.explain-vid');
+                    mv?.pause?.();
+                    modal.hidden = true;
+                }
+
+                modal?.querySelector('.close-modal')?.addEventListener('click', () => closeModal());
+                modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+                // Lazy load when section is visible
+                const section = explainer;
+                if ('IntersectionObserver' in window && video) {
+                    const io = new IntersectionObserver((entries) => {
+                        entries.forEach((entry) => {
+                            if (entry.isIntersecting) {
+                                if (video.preload !== 'metadata') video.preload = 'metadata';
+                                io.disconnect();
+                            }
+                        });
+                    }, { rootMargin: '200px' });
+                    io.observe(section);
+                }
+            });
+        } catch (_) { /* no-op */ }
     }
 }

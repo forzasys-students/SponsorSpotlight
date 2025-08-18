@@ -191,11 +191,69 @@
                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Total time in seconds this logo is visible">Time (s)</th>
                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Percentage of total video duration this logo appears">Percentage</th>
                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average detections per frame when logo is present">Avg. per Frame</th>
-                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average percentage of frame area covered by logo when present">Avg. Coverage (%)</th>
+                                                 <th>
+                                                     <span class="metric-explainer coverage-explainer" data-explainer-title="What is Coverage?">
+                                                         Avg. Coverage (%)
+                                                         <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="coverage-popover" title="What is Coverage?">ⓘ</button>
+                                                         <div id="coverage-popover" class="rich-popover" role="dialog" aria-modal="false" hidden>
+                                                             <div class="popover-content">
+                                                                 <div class="media">
+                                                                     <img class="explain-img" src="/static/results/coverage.png" alt="Coverage definition diagram">
+                                                                 </div>
+                                                                 <div class="copy">
+                                                                     <strong>Coverage</strong> is the percentage of the frame area covered by the logo when it is present.
+                                                                     <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     </span>
+                                                 </th>
                                                  <th data-bs-toggle="tooltip" data-bs-placement="top" title="Maximum percentage of frame area covered by logo in any single frame">Max Coverage (%)</th>
-                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average prominence score (0-100) based on logo position and size when present. Higher = more eye-catching">Prominence (avg)</th>
+                                                                                                   <th>
+                                                     <span class="metric-explainer prominence-explainer" data-explainer-title="What is Prominence?">
+                                                          Prominence (avg)
+                                                          <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="prominence-popover" title="What is Prominence?">ⓘ</button>
+                                                          <div id="prominence-popover" class="rich-popover" role="dialog" aria-modal="false" hidden>
+                                                              <div class="popover-content">
+                                                                  <div class="media">
+                                                                      <video
+                                                                          class="explain-vid"
+                                                                          muted
+                                                                          loop
+                                                                          playsinline
+                                                                          preload="none"
+                                                                          poster="/static/results/prominence-poster.jpg"
+                                                                      >
+                                                                          <source src="/static/results/prominence.webm" type="video/webm">
+                                                                          <source src="/static/results/prominence.mp4" type="video/mp4">
+                                                                      </video>
+                                                                  </div>
+                                                                  <div class="copy">
+                                                                      <strong>Prominence</strong> is how visible the brand is within the frame and over time. This example highlights areas that count toward prominence.
+                                                                      <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                      </span>
+                                                  </th>
                                                  <th data-bs-toggle="tooltip" data-bs-placement="top" title="Highest prominence score (0-100) achieved in any single frame. Shows peak visibility moment">Prominence (max)</th>
-                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average share of voice (0-100%) when brand appears. Higher = less competition for attention">Share of Voice (avg)</th>
+                                                 <th>
+                                                     <span class="metric-explainer share-of-voice-explainer" data-explainer-title="What is Share of Voice?">
+                                                         Share of Voice (avg)
+                                                         <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-of-voice-popover" title="What is Share of Voice?">ⓘ</button>
+                                                         <div id="share-of-voice-popover" class="rich-popover" role="dialog" aria-modal="false" hidden>
+                                                             <div class="popover-content">
+                                                                 <div class="media">
+                                                                     <img class="explain-img" src="/static/results/share_of_voice.png" alt="Share of voice definition diagram">
+                                                                 </div>
+                                                                 <div class="copy">
+                                                                     <strong>Share of Voice</strong> measures whether the brand appears alone or alongside other logos. Higher percentages mean the brand has less competition for attention.
+                                                                     <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     </span>
+                                                 </th>
                                                  <th data-bs-toggle="tooltip" data-bs-placement="top" title="Percentage of brand's total time spent appearing alone (no other brands)">Solo Time (%)</th>
                                                 {% endif %}
                                             </tr>
@@ -292,6 +350,16 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Shared Explainer Modal -->
+    <div id="explainer-modal" class="explain-modal" hidden role="dialog" aria-modal="true" aria-labelledby="explainer-modal-title">
+        <div class="modal-inner">
+            <h3 id="explainer-modal-title"></h3>
+            <div class="explainer-modal-media"></div>
+            <p class="mt-2 explainer-modal-copy"></p>
+            <button type="button" class="btn btn-secondary close-modal">Close</button>
         </div>
     </div>
 
