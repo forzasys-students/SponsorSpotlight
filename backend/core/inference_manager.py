@@ -928,8 +928,8 @@ class InferenceManager:
             avg_sov_present = (sum_sov_present / frames_present * 100) if frames_present > 0 else 0.0
             solo_percentage = (solo_time / time_value * 100) if time_value > 0 else 0.0
 
-            # Filter out brands with less than 20 detections to reduce false positives
-            if stats["detections"] >= 20:
+            # Filter out brands with less than 30 detections to reduce false positives
+            if stats["detections"] >= 30:
                 final_stats[logo] = {
                     "frames": frames_present,
                     "time": min(time_value, total_video_time),
