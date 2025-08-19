@@ -476,6 +476,32 @@
 	background: #ffffff;
 }
 
+/* Custom styling for agent response tables */
+.agent-table {
+    color: #000000 !important;
+    border: 1px solid #0080ff;
+    padding: 0.75rem;
+}
+
+.agent-table th {
+    color: #000000 !important;
+    font-weight: 600;
+    background-color: #f8f9fa !important;
+    border-bottom: 2px solid #dee2e6;
+    padding: 0.75rem;
+}
+
+.agent-table td {
+    color: #000000 !important;
+    padding: 0.75rem;
+}
+
+/* Override any other table styles for agent tables */
+#detailedTable > thead > tr > th.agent-table {
+    background-color: #f8f9fa !important;
+    padding: 0.75rem;
+}
+
 .insight-item.warning {
     border-left-color: #ffc107;
 }

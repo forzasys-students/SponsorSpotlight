@@ -325,6 +325,8 @@ class InferenceManager:
         frame_by_frame_detections = defaultdict(list)
         # Per-frame coverage series: percentage per frame for each logo (0 when absent)
         coverage_per_frame = defaultdict(list)
+        # Per-frame prominence series: 0-100 score per frame (0 when absent)
+        prominence_per_frame = defaultdict(list)
         
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
@@ -463,6 +465,10 @@ class InferenceManager:
                         aggregated_stats[main_logo]["max_prominence"] = s
                     if s >= prominence_high_threshold:
                         aggregated_stats[main_logo]["high_prominence_time"] += frame_time
+                    # Ensure backfill for new logos
+                    while len(prominence_per_frame[main_logo]) < (frame_count - 1):
+                        prominence_per_frame[main_logo].append(0.0)
+                    prominence_per_frame[main_logo].append(round(s * 100.0, 2))
 
                 # Calculate Share of Voice for this brand in this frame
                 if main_logo in unique_brands_in_frame:
@@ -482,6 +488,12 @@ class InferenceManager:
                     while len(coverage_per_frame[lg]) < (frame_count - 1):
                         coverage_per_frame[lg].append(0.0)
                     coverage_per_frame[lg].append(0.0)
+
+            for lg in list(prominence_per_frame.keys()):
+                if lg not in per_brand_prominence_frame:
+                    while len(prominence_per_frame[lg]) < (frame_count - 1):
+                        prominence_per_frame[lg].append(0.0)
+                    prominence_per_frame[lg].append(0.0)
 
             # Periodic debug logging per 25 frames
             if frame_count % 25 == 0 and frame_area > 0 and logo_area_pixels_in_frame:
@@ -624,6 +636,17 @@ class InferenceManager:
             coverage_series_file = os.path.join(result_dir, 'coverage_per_frame.json')
             with open(coverage_series_file, 'w') as f:
                 json.dump(coverage_series, f, indent=2)
+            # Save per-frame prominence series (0-100 per frame, 0 when absent)
+            for lg, series in prominence_per_frame.items():
+                while len(series) < total_frames:
+                    series.append(0.0)
+            prominence_series = {
+                "frames_total": total_frames,
+                "per_logo": {lg: [round(float(v), 2) for v in series] for lg, series in prominence_per_frame.items()}
+            }
+            prominence_series_file = os.path.join(result_dir, 'prominence_per_frame.json')
+            with open(prominence_series_file, 'w') as f:
+                json.dump(prominence_series, f, indent=2)
         except Exception as e:
             print(f"Failed to write coverage_debug.json: {e}")
         
@@ -717,6 +740,8 @@ class InferenceManager:
         })
         frame_by_frame_detections = defaultdict(list)
         coverage_per_frame = defaultdict(list)
+        # Per-frame prominence series: 0-100 per frame (0 when absent)
+        prominence_per_frame = defaultdict(list)
 
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
@@ -841,6 +866,10 @@ class InferenceManager:
                         aggregated_stats[main_logo]["max_prominence"] = s
                     if s >= prominence_high_threshold:
                         aggregated_stats[main_logo]["high_prominence_time"] += frame_time
+                    # Ensure backfill for new logos
+                    while len(prominence_per_frame[main_logo]) < (frame_count - 1):
+                        prominence_per_frame[main_logo].append(0.0)
+                    prominence_per_frame[main_logo].append(round(s * 100.0, 2))
 
                 # Calculate Share of Voice for this brand in this frame
                 if main_logo in unique_brands_in_frame:
@@ -859,6 +888,12 @@ class InferenceManager:
                     while len(coverage_per_frame[lg]) < (frame_count - 1):
                         coverage_per_frame[lg].append(0.0)
                     coverage_per_frame[lg].append(0.0)
+
+            for lg in list(prominence_per_frame.keys()):
+                if lg not in per_brand_prominence_frame:
+                    while len(prominence_per_frame[lg]) < (frame_count - 1):
+                        prominence_per_frame[lg].append(0.0)
+                    prominence_per_frame[lg].append(0.0)
 
             # Write raw frame and annotated frame
             raw_out.write(frame)
@@ -989,6 +1024,13 @@ class InferenceManager:
             coverage_series = {"frames_total": total_frames, "per_logo": {lg: [round(float(v), 4) for v in series] for lg, series in coverage_per_frame.items()}}
             with open(os.path.join(result_dir, 'coverage_per_frame.json'), 'w') as f:
                 json.dump(coverage_series, f, indent=2)
+            # Write prominence series
+            for lg, series in prominence_per_frame.items():
+                while len(series) < total_frames:
+                    series.append(0.0)
+            prominence_series = {"frames_total": total_frames, "per_logo": {lg: [round(float(v), 2) for v in series] for lg, series in prominence_per_frame.items()}}
+            with open(os.path.join(result_dir, 'prominence_per_frame.json'), 'w') as f:
+                json.dump(prominence_series, f, indent=2)
         except Exception as e:
             print(f"Failed to write coverage debug (stream): {e}")
 

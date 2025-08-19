@@ -31,6 +31,27 @@ class Dashboard {
         const data = await response.json();
         this.logoStats = data.logo_stats || {};
         this.videoMetadata = data.video_metadata || {};
+        // Preload per-frame series if video for segment filtering
+        if (this.fileType === 'video') {
+            try {
+                const covResp = await fetch(`/api/coverage_per_frame/${this.fileHash}`);
+                if (covResp.ok) {
+                    this.coveragePerFrame = await covResp.json();
+                }
+            } catch {}
+            try {
+                const promResp = await fetch(`/api/prominence_per_frame/${this.fileHash}`);
+                if (promResp.ok) {
+                    this.prominencePerFrame = await promResp.json();
+                }
+            } catch {}
+            try {
+                const tlResp = await fetch(`/api/timeline_stats/${this.fileHash}`);
+                if (tlResp.ok) {
+                    this.timelineStats = await tlResp.json();
+                }
+            } catch {}
+        }
     }
 
     initializeOverview() {
@@ -306,6 +327,9 @@ class Dashboard {
     initializeDetailed() {
         this.renderDetailedTable();
         this.setupTableFiltering();
+        if (this.fileType === 'video') {
+            this.setupSegmentFiltering();
+        }
     }
 
     renderDetailedTable() {
@@ -637,6 +661,133 @@ class Dashboard {
         // Chart type toggle handled globally in setupChartTypeToggle()
         // Initialize generic metric explainers
         this.initMetricExplainers();
+    }
+
+    setupSegmentFiltering() {
+        const btn = document.getElementById('runSegmentFilter');
+        const out = document.getElementById('segmentResults');
+        const logoSelect = document.getElementById('segFilterLogo');
+        const maxCovHint = document.getElementById('maxCoverageHint');
+        const maxPromHint = document.getElementById('maxProminenceHint');
+        if (!btn || !out || !logoSelect) return;
+
+        // Populate logo dropdown
+        const logos = Object.keys(this.logoStats).sort();
+        logos.forEach(logo => {
+            const option = document.createElement('option');
+            option.value = logo;
+            option.textContent = logo;
+            logoSelect.appendChild(option);
+        });
+
+        // Update max hints when logo changes
+        const updateHints = () => {
+            const selectedLogo = logoSelect.value;
+            if (selectedLogo && this.logoStats[selectedLogo]) {
+                const stats = this.logoStats[selectedLogo];
+                maxCovHint.textContent = `max: ${(stats.coverage_avg_present || 0).toFixed(2)}%`;
+                maxPromHint.textContent = `max: ${(stats.prominence_avg_present || 0).toFixed(1)}`;
+            } else {
+                // Show global maxes
+                const maxCov = Math.max(...Object.values(this.logoStats).map(s => s.coverage_avg_present || 0));
+                const maxProm = Math.max(...Object.values(this.logoStats).map(s => s.prominence_avg_present || 0));
+                maxCovHint.textContent = `max: ${maxCov.toFixed(2)}%`;
+                maxPromHint.textContent = `max: ${maxProm.toFixed(1)}`;
+            }
+        };
+
+        logoSelect.addEventListener('change', updateHints);
+        updateHints(); // Initial load
+
+        const fps = Number(this.videoMetadata.fps) || 25;
+        const toTime = (frame) => (frame / fps).toFixed(2);
+
+        btn.addEventListener('click', () => {
+            const logoQ = (logoSelect.value || '').trim().toLowerCase();
+            const minCov = Number(document.getElementById('segMinCoverage')?.value) || 0;
+            const minProm = Number(document.getElementById('segMinProminence')?.value) || 0;
+            //  merge small gaps, drop very short segments
+            const mergeGapSec = 1; // seconds
+            const minDurationSec = 1.0; // seconds
+
+            const covData = (this.coveragePerFrame && this.coveragePerFrame.per_logo) || {};
+            const promData = (this.prominencePerFrame && this.prominencePerFrame.per_logo) || {};
+            const logos = Object.keys(this.logoStats).filter(l => !logoQ || l.toLowerCase().includes(logoQ));
+            if (logos.length === 0) {
+                out.innerHTML = '<div class="alert alert-warning">No logos match your query.</div>';
+                return;
+            }
+
+            const rawSegments = [];
+            logos.forEach(logo => {
+                const covSeries = covData[logo] || [];
+                const promSeries = promData[logo] || [];
+                const presentFrames = (this.timelineStats && this.timelineStats[logo]) || [];
+                // Convert presence list to a Set for O(1)
+                const presentSet = new Set(presentFrames);
+
+                let start = null;
+                const flush = (endFrame) => {
+                    if (start !== null) {
+                        rawSegments.push({ logo, start, end: endFrame });
+                        start = null;
+                    }
+                };
+
+                // Iterate by frame index based on whichever series is longest
+                const maxLen = Math.max(covSeries.length, promSeries.length);
+                for (let f = 0; f < maxLen; f++) {
+                    const isPresent = presentSet.size === 0 ? true : presentSet.has(f + 1);
+                    const covOk = (covSeries[f] || 0) >= minCov;
+                    const promOk = (promSeries[f] || 0) >= minProm;
+                    if (isPresent && covOk && promOk) {
+                        if (start === null) start = f;
+                    } else {
+                        flush(f - 1);
+                    }
+                }
+                flush(maxLen - 1);
+            });
+
+            // Merge nearby segments and filter by min duration
+            const merged = [];
+            const framesToSec = (frames) => frames / fps;
+            rawSegments.sort((a,b) => a.start - b.start);
+            rawSegments.forEach(seg => {
+                if (merged.length === 0) { merged.push({...seg}); return; }
+                const last = merged[merged.length - 1];
+                const gapFrames = seg.start - (last.end + 1);
+                const gapSec = framesToSec(Math.max(0, gapFrames));
+                if (seg.logo === last.logo && gapSec <= mergeGapSec) {
+                    // merge
+                    if (seg.end > last.end) last.end = seg.end;
+                } else {
+                    merged.push({...seg});
+                }
+            });
+
+            const results = merged.filter(seg => framesToSec(seg.end - seg.start + 1) >= minDurationSec);
+
+            if (results.length === 0) {
+                out.innerHTML = '<div class="alert alert-info">No segments found for the given conditions.</div>';
+                return;
+            }
+
+            out.innerHTML = `
+                <div class="list-group">
+                    ${results.slice(0, 50).map(r => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${r.logo}</strong>
+                                <span class="text-muted ms-2">${toTime(r.start)}s - ${toTime(r.end)}s</span>
+                            </div>
+                            <code>frames ${r.start} - ${r.end}</code>
+                        </div>
+                    `).join('')}
+                </div>
+                ${results.length > 50 ? `<div class="mt-2 text-muted">Showing first 50 of ${results.length} segments</div>` : ''}
+            `;
+        });
     }
 
     updateExposureChartType(type) {
@@ -1039,7 +1190,7 @@ class Dashboard {
         const header = `Top ${items.length} by ${metric} (${dir})`;
         return `
             <div class="table-responsive mt-2">
-                <table class="table table-sm align-middle mb-2">
+                <table class="table table-sm align-middle mb-2 agent-table">
                     <thead>
                         <tr>
                             <th>#</th>
