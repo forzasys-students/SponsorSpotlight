@@ -5,6 +5,8 @@ class Dashboard {
         this.logoStats = {};
         this.videoMetadata = {};
         this.charts = {};
+        this.chartMeta = {};
+        this.currentChartType = 'pie';
     }
 
     async init() {
@@ -34,7 +36,7 @@ class Dashboard {
     initializeOverview() {
         this.updateKeyMetrics();
         this.renderTopPerformers();
-        this.renderExposureChart();
+        this.renderAllCharts();
     }
 
     updateKeyMetrics() {
@@ -51,14 +53,11 @@ class Dashboard {
             totalExposure = logos.reduce((sum, logo) => sum + (this.logoStats[logo].time || 0), 0);
             topLogo = logos.sort((a, b) => (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0))[0] || '-';
 
-            // Compute highest overall coverage (fallback to present coverage if overall not available)
+            // Compute highest coverage consistently with charts: use coverage_avg_present only
             const coverageScore = (logo) => {
                 const s = this.logoStats[logo] || {};
-                const overall = Number(s.coverage_avg_overall);
                 const present = Number(s.coverage_avg_present);
-                if (!isNaN(overall) && overall > 0) return overall;
-                if (!isNaN(present) && present > 0) return present;
-                return 0;
+                return !isNaN(present) && present > 0 ? present : 0;
             };
             if (logos.length > 0) {
                 topCoverageLogo = logos.slice().sort((a, b) => coverageScore(b) - coverageScore(a))[0] || '-';
@@ -82,6 +81,74 @@ class Dashboard {
             const name = safeName.length > 15 ? safeName.substring(0, 15) + '...' : safeName;
             const value = isNaN(topCoverageValue) ? 0 : topCoverageValue;
             topCoverageEl.textContent = `${name}`;
+        }
+
+        // Update second row of metrics cards
+        this.updateSecondRowMetrics();
+    }
+
+    updateSecondRowMetrics() {
+        const logos = Object.keys(this.logoStats);
+        if (logos.length === 0) return;
+
+        // Top Prominence
+        const topProminenceLogo = logos.sort((a, b) => {
+            const aProminence = this.logoStats[a].prominence_avg_present || 0;
+            const bProminence = this.logoStats[b].prominence_avg_present || 0;
+            return bProminence - aProminence;
+        })[0];
+        const topProminenceEl = document.getElementById('top-prominence');
+        if (topProminenceEl) {
+            const name = topProminenceLogo.length > 15 ? topProminenceLogo.substring(0, 15) + '...' : topProminenceLogo;
+            topProminenceEl.textContent = name;
+        }
+
+        // Top Share of Voice
+        const topShareVoiceLogo = logos.sort((a, b) => {
+            const aShareVoice = this.logoStats[a].share_of_voice_avg_present || 0;
+            const bShareVoice = this.logoStats[b].share_of_voice_avg_present || 0;
+            return bShareVoice - aShareVoice;
+        })[0];
+        const topShareVoiceEl = document.getElementById('top-share-voice');
+        if (topShareVoiceEl) {
+            const name = topShareVoiceLogo.length > 15 ? topShareVoiceLogo.substring(0, 15) + '...' : topShareVoiceLogo;
+            topShareVoiceEl.textContent = name;
+        }
+
+        // Top Solo Time
+        const topSoloTimeLogo = logos.sort((a, b) => {
+            const aSoloTime = this.logoStats[a].share_of_voice_solo_percentage || 0;
+            const bSoloTime = this.logoStats[b].share_of_voice_solo_percentage || 0;
+            return bSoloTime - aSoloTime;
+        })[0];
+        const topSoloTimeEl = document.getElementById('top-solo-time');
+        if (topSoloTimeEl) {
+            const name = topSoloTimeLogo.length > 15 ? topSoloTimeLogo.substring(0, 15) + '...' : topSoloTimeLogo;
+            topSoloTimeEl.textContent = name;
+        }
+
+        // Top Detection
+        const topDetectionLogo = logos.sort((a, b) => {
+            const aDetections = this.logoStats[a].detections || 0;
+            const bDetections = this.logoStats[b].detections || 0;
+            return bDetections - aDetections;
+        })[0];
+        const topDetectionEl = document.getElementById('top-detection');
+        if (topDetectionEl) {
+            const name = topDetectionLogo.length > 15 ? topDetectionLogo.substring(0, 15) + '...' : topDetectionLogo;
+            topDetectionEl.textContent = name;
+        }
+
+        // Top Time
+        const topTimeLogo = logos.sort((a, b) => {
+            const aTime = this.logoStats[a].time || 0;
+            const bTime = this.logoStats[b].time || 0;
+            return bTime - aTime;
+        })[0];
+        const topTimeEl = document.getElementById('top-time');
+        if (topTimeEl) {
+            const name = topTimeLogo.length > 15 ? topTimeLogo.substring(0, 15) + '...' : topTimeLogo;
+            topTimeEl.textContent = name;
         }
     }
 
@@ -111,63 +178,127 @@ class Dashboard {
         }).join('');
     }
 
-    renderExposureChart() {
-        const ctx = document.getElementById('exposureChart').getContext('2d');
+    renderAllCharts() {
+        const exposureMetric = this.fileType === 'video' ? 'percentage' : 'detections';
+        const exposureSuffix = this.fileType === 'video' ? '%' : ' detections';
+        this.chartMeta = {
+            exposure: { metric: exposureMetric, suffix: exposureSuffix, title: 'Exposure Distribution' },
+            detections: { metric: 'detections', suffix: ' detections', title: 'Detection Distribution' },
+            prominence: { metric: 'prominence_avg_present', suffix: '', title: 'Prominence Distribution' },
+            coverage: { metric: 'coverage_avg_present', suffix: '%', title: 'Coverage Distribution' },
+            shareVoice: { metric: 'share_of_voice_avg_present', suffix: '%', title: 'Share of Voice Distribution' },
+        };
+        Object.entries(this.chartMeta).forEach(([id, m]) => {
+            this.renderChart(id, m.metric, m.suffix, m.title, this.currentChartType);
+        });
+        
+        // Set up chart type toggle
+        this.setupChartTypeToggle();
+    }
+
+    renderChart(chartId, metric, suffix, title, type = this.currentChartType || 'pie') {
+        const canvas = document.getElementById(chartId + 'Chart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
         const logos = Object.keys(this.logoStats)
             .sort((a, b) => {
-                if (this.fileType === 'video') {
-                    return (this.logoStats[b].percentage || 0) - (this.logoStats[a].percentage || 0);
-                }
-                return this.logoStats[b].detections - this.logoStats[a].detections;
+                const aValue = this.logoStats[a][metric] || 0;
+                const bValue = this.logoStats[b][metric] || 0;
+                return bValue - aValue;
             })
             .slice(0, 10);
 
-        const data = logos.map(logo => 
-            this.fileType === 'video' ? 
-            (this.logoStats[logo].percentage || 0) : 
-            this.logoStats[logo].detections
-        );
+        const data = logos.map(logo => this.logoStats[logo][metric] || 0);
 
         const colors = [
             '#58a6ff', '#3fb950', '#ff7b72', '#a5a5ff', '#ffab70',
             '#f85149', '#fd8c73', '#79c0ff', '#7ee787', '#ffa657'
         ];
 
-        this.charts.exposure = new Chart(ctx, {
-            type: 'pie',
+        this.charts[chartId] = new Chart(ctx, {
+            type: type,
             data: {
                 labels: logos,
                 datasets: [{
+                    label: title,
                     data: data,
-                    backgroundColor: colors,
+                    backgroundColor: type === 'radar' ? 'rgba(255, 221, 0, 0.63)' : colors,
                     borderWidth: 2,
-                    borderColor: '#fff'
+                    borderColor: type === 'pie' ? '#fff' : colors
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                aspectRatio: 1.5,
                 plugins: {
+                    title: {
+                        display: true,
+                        text: title,
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        }
+                    },
                     legend: {
-                        position: 'bottom',
+                        position: type === 'pie' ? 'bottom' : 'top',
                         labels: {
                             padding: 15,
-                            usePointStyle: true
-                        }
+                            usePointStyle: true,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        display: type !== 'bar'
                     },
                     tooltip: {
                         callbacks: {
                             label: (context) => {
-                                const label = context.label;
-                                const value = context.parsed;
-                                const suffix = this.fileType === 'video' ? '%' : ' detections';
-                                return `${label}: ${value}${suffix}`;
+                                const label = context.label ?? '';
+                                // Use raw for both pie and bar; fallback to parsed.y/x when needed
+                                let val = context.raw;
+                                if (val === undefined || val === null) {
+                                    const p = context.parsed;
+                                    if (p && typeof p === 'object') {
+                                        val = (p.y !== undefined ? p.y : p.x);
+                                    } else {
+                                        val = p;
+                                    }
+                                }
+                                // Format percentages to 1 decimal when suffix is '%'
+                                if (typeof val === 'number' && suffix.trim() === '%') {
+                                    val = val.toFixed(1);
+                                }
+                                return `${label}: ${val}${suffix}`;
                             }
                         }
                     }
-                }
+                },
+                scales: type === 'bar' ? { y: { beginAtZero: true } } : undefined
             }
         });
+    }
+
+    setupChartTypeToggle() {
+        const pieRadio = document.getElementById('pieChart');
+        const barRadio = document.getElementById('barChart');
+        const radarRadio = document.getElementById('radarChart');
+
+        const rebuildAll = (type) => {
+            this.currentChartType = type;
+            // destroy existing
+            Object.values(this.charts).forEach(ch => { try { ch.destroy(); } catch(e){} });
+            this.charts = {};
+            // re-render
+            Object.entries(this.chartMeta).forEach(([id, m]) => {
+                this.renderChart(id, m.metric, m.suffix, m.title, type);
+            });
+        };
+
+        pieRadio?.addEventListener('change', () => rebuildAll('pie'));
+        barRadio?.addEventListener('change', () => rebuildAll('bar'));
+        radarRadio?.addEventListener('change', () => rebuildAll('radar'));
     }
 
 
@@ -363,10 +494,6 @@ class Dashboard {
 
     initializeInsights() {
         this.generateInsights();
-        this.renderPerformanceChart();
-        if (this.fileType === 'video') {
-            this.renderEngagementChart();
-        }
     }
 
     generateInsights() {
@@ -443,7 +570,7 @@ class Dashboard {
                     label: this.fileType === 'video' ? 'Exposure %' : 'Detections',
                     data: performanceData,
                     fill: true,
-                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    backgroundColor: 'rgba(255, 0, 0, 0.6)',
                     borderColor: 'rgb(54, 162, 235)',
                     pointBackgroundColor: 'rgb(54, 162, 235)',
                     pointBorderColor: '#fff',
@@ -507,19 +634,7 @@ class Dashboard {
     }
 
     setupEventListeners() {
-        // Chart type toggle
-        const chartTypeInputs = document.querySelectorAll('input[name="chartType"]');
-        chartTypeInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
-                if (this.charts.exposure) {
-                    this.charts.exposure.destroy();
-                }
-                
-                const chartType = e.target.id === 'pieChart' ? 'pie' : 'bar';
-                this.updateExposureChartType(chartType);
-            });
-        });
-
+        // Chart type toggle handled globally in setupChartTypeToggle()
         // Initialize generic metric explainers
         this.initMetricExplainers();
     }

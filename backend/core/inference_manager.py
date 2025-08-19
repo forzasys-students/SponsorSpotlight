@@ -547,8 +547,8 @@ class InferenceManager:
             avg_cov_overall = (sum_cov_present / total_frames * 100) if total_frames > 0 else 0.0
             avg_prom_present = (sum_prom_present / frames_present * 100) if frames_present > 0 else 0.0
 
-            # Filter out brands with less than 30 detections to reduce false positives
-            if stats["detections"] >= 30:
+            # Filter out brands with less than 50 detections to reduce false positives
+            if stats["detections"] >= 50:
                 final_stats[logo] = {
                     "frames": frames_present,
                     "time": min(time_value, total_video_time),
@@ -928,8 +928,8 @@ class InferenceManager:
             avg_sov_present = (sum_sov_present / frames_present * 100) if frames_present > 0 else 0.0
             solo_percentage = (solo_time / time_value * 100) if time_value > 0 else 0.0
 
-            # Filter out brands with less than 30 detections to reduce false positives
-            if stats["detections"] >= 30:
+            # Filter out brands with less than 50 detections to reduce false positives
+            if stats["detections"] >= 50:
                 final_stats[logo] = {
                     "frames": frames_present,
                     "time": min(time_value, total_video_time),
