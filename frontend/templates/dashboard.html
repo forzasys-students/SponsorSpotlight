@@ -54,63 +54,108 @@
                 <div class="tab-content mt-4" id="dashboardTabContent">
                     <!-- Overview Tab -->
                     <div class="tab-pane fade show active" id="overview" role="tabpanel">
-                        <!-- Key Metrics Cards -->
-                        <div class="row row-cols-1 row-cols-md-5 g-3 mb-4">
-                            <div class="col">
-                                <div class="card stat-card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-eye-fill stat-icon text-primary"></i>
-                                        <h3 id="total-detections" class="stat-number">0</h3>
-                                        <p class="stat-label">Total Detections</p>
+                        <!-- Compact Metrics Overview -->
+                        <div class="row g-3 mb-4">
+                            <!-- System Overview - Left Side -->
+                            <div class="col-md-4">
+                                <div class="metrics-section">
+                                    <h6 class="section-title"><i class="bi bi-speedometer2"></i> Statistical Overview</h6>
+                                    <div class="compact-metrics">
+                                        <div class="compact-metric">
+                                            <i class="bi bi-eye-fill text-primary"></i>
+                                            <span class="metric-label">Total Detections:</span>
+                                            <span id="total-detections" class="metric-value">0</span>
+                                        </div>
+                                        <div class="compact-metric">
+                                            <i class="bi bi-award-fill text-success"></i>
+                                            <span class="metric-label">Unique Logos:</span>
+                                            <span id="unique-logos" class="metric-value">0</span>
+                                        </div>
+                                        <div class="compact-metric">
+                                            <i class="bi bi-clock-fill text-warning"></i>
+                                            <span class="metric-label">Total Exposure:</span>
+                                            <span id="total-exposure" class="metric-value">0s</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col">
-                                <div class="card stat-card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-award-fill stat-icon text-success"></i>
-                                        <h3 id="unique-logos" class="stat-number">0</h3>
-                                        <p class="stat-label">Unique Logos</p>
+                            
+                            <!-- Top Performers - Right Side -->
+                            <div class="col-md-8">
+                                <div class="metrics-section">
+                                    <h6 class="section-title"><i class="bi bi-trophy"></i> Top Performers</h6>
+                                    <div class="compact-performers">
+                                        <div class="performer-row">
+                                            <div class="performer-item">
+                                                <i class="bi bi-trophy-fill text-danger"></i>
+                                                <span class="performer-label">Top Logo:</span>
+                                                <span id="top-logo" class="performer-value">-</span>
+                                            </div>
+                                            {% if file_type == 'video' %}
+                                            <div class="performer-item">
+                                                <i class="bi bi-aspect-ratio-fill text-info"></i>
+                                                <span class="performer-label">Top Coverage:</span>
+                                                <span id="top-coverage" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-star-fill text-warning"></i>
+                                                <span class="performer-label">Top Prominence:</span>
+                                                <span id="top-prominence" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-volume-up-fill text-info"></i>
+                                                <span class="performer-label">Top Share of Voice:</span>
+                                                <span id="top-share-voice" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-person-fill text-success"></i>
+                                                <span class="performer-label">Top Solo Time:</span>
+                                                <span id="top-solo-time" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-bullseye text-danger"></i>
+                                                <span class="performer-label">Top Detection:</span>
+                                                <span id="top-detection" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-stopwatch-fill text-primary"></i>
+                                                <span class="performer-label">Top Time:</span>
+                                                <span id="top-time" class="performer-value">-</span>
+                                            </div>
+                                            {% else %}
+                                            <div class="performer-item">
+                                                <i class="bi bi-bullseye text-danger"></i>
+                                                <span class="performer-label">Top Detection:</span>
+                                                <span id="top-detection" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-star-fill text-warning"></i>
+                                                <span class="performer-label">Top Prominence:</span>
+                                                <span id="top-prominence" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-volume-up-fill text-info"></i>
+                                                <span class="performer-label">Top Share of Voice:</span>
+                                                <span id="top-share-voice" class="performer-value">-</span>
+                                            </div>
+                                            <div class="performer-item">
+                                                <i class="bi bi-person-fill text-success"></i>
+                                                <span class="performer-label">Top Solo Time:</span>
+                                                <span id="top-solo-time" class="performer-value">-</span>
+                                            </div>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col">
-                                <div class="card stat-card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-clock-fill stat-icon text-warning"></i>
-                                        <h3 id="total-exposure" class="stat-number">0s</h3>
-                                        <p class="stat-label">Total Exposure</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <div class="card stat-card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-trophy-fill stat-icon text-danger"></i>
-                                        <h3 id="top-logo" class="stat-number">-</h3>
-                                        <p class="stat-label">Top Logo</p>
-                                    </div>
-                                </div>
-                            </div>
-                             {% if file_type == 'video' %}
-                            <div class="col">
-                                 <div class="card stat-card">
-                                     <div class="card-body text-center">
-                                         <i class="bi bi-aspect-ratio-fill stat-icon text-info"></i>
-                                         <h3 id="top-coverage" class="stat-number">-</h3>
-                                         <p class="stat-label">Top Coverage (Overall)</p>
-                                     </div>
-                                 </div>
-                             </div>
-                             {% endif %}
                         </div>
 
                         <div class="row">
                             <!-- Top Performers -->
                             <div class="col-md-4">
-                                <div class="card h-100">
+                                <div class="card">
                                     <div class="card-header">
-                                        <h5><i class="bi bi-trophy"></i> Top Performers</h5>
+                                        <h5><i class="bi bi-trophy"></i> Top Performers on Coverage</h5>
                                     </div>
                                     <div class="card-body">
                                         <div id="top-performers-list">
@@ -118,22 +163,84 @@
                                         </div>
                                     </div>
                                 </div>
+                                
                             </div>
 
-                            <!-- Exposure Distribution Chart -->
+                            <!-- Charts Section -->
                             <div class="col-md-8">
                                 <div class="card h-100">
-                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                        <h5><i class="bi bi-pie-chart"></i> Exposure Distribution</h5>
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <input type="radio" class="btn-check" name="chartType" id="pieChart" checked>
-                                            <label class="btn btn-outline-primary" for="pieChart">Pie</label>
-                                            <input type="radio" class="btn-check" name="chartType" id="barChart">
-                                            <label class="btn btn-outline-primary" for="barChart">Bar</label>
-                                        </div>
+                                    <div class="card-header">
+                                        <h5><i class="bi bi-graph-up"></i> Data Visualization</h5>
                                     </div>
                                     <div class="card-body">
-                                        <canvas id="exposureChart"></canvas>
+                                        <!-- Chart Tabs -->
+                                        <ul class="nav nav-tabs nav-fill mb-3" id="chartTab" role="tablist">
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link active" id="exposure-tab" data-bs-toggle="tab" data-bs-target="#exposure" type="button" role="tab">
+                                                    <i class="bi bi-pie-chart"></i> Exposure
+                                                </button>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link" id="detections-tab" data-bs-toggle="tab" data-bs-target="#detections" type="button" role="tab">
+                                                    <i class="bi bi-bullseye"></i> Detections
+                                                </button>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link" id="prominence-tab" data-bs-toggle="tab" data-bs-target="#prominence" type="button" role="tab">
+                                                    <i class="bi bi-star"></i> Prominence
+                                                </button>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link" id="coverage-tab" data-bs-toggle="tab" data-bs-target="#coverage" type="button" role="tab">
+                                                    <i class="bi bi-aspect-ratio"></i> Coverage
+                                                </button>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link" id="share-voice-tab" data-bs-toggle="tab" data-bs-target="#share-voice" type="button" role="tab">
+                                                    <i class="bi bi-volume-up"></i> Share of Voice
+                                                </button>
+                                            </li>
+                                        </ul>
+
+                                        <!-- Chart Type Toggle -->
+                                        <div class="d-flex justify-content-end mb-3">
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <input type="radio" class="btn-check" name="chartType" id="pieChart" checked>
+                                                <label class="btn btn-outline-primary" for="pieChart">Pie</label>
+                                                <input type="radio" class="btn-check" name="chartType" id="barChart">
+                                                <label class="btn btn-outline-primary" for="barChart">Bar</label>
+                                                <input type="radio" class="btn-check" name="chartType" id="radarChart">
+                                                <label class="btn btn-outline-primary" for="radarChart">Radar</label>
+                                            </div>
+                                        </div>
+
+                                        <!-- Chart Content -->
+                                        <div class="tab-content" id="chartTabContent">
+                                            <!-- Exposure Distribution Tab -->
+                                            <div class="tab-pane fade show active" id="exposure" role="tabpanel">
+                                                <canvas id="exposureChart"></canvas>
+                                            </div>
+                                            
+                                            <!-- Detections Tab -->
+                                            <div class="tab-pane fade" id="detections" role="tabpanel">
+                                                <canvas id="detectionsChart"></canvas>
+                                            </div>
+                                            
+                                            <!-- Prominence Tab -->
+                                            <div class="tab-pane fade" id="prominence" role="tabpanel">
+                                                <canvas id="prominenceChart"></canvas>
+                                            </div>
+                                            
+                                            <!-- Coverage Tab -->
+                                            <div class="tab-pane fade" id="coverage" role="tabpanel">
+                                                <canvas id="coverageChart"></canvas>
+                                            </div>
+                                            
+                                            <!-- Share of Voice Tab -->
+                                            <div class="tab-pane fade" id="share-voice" role="tabpanel">
+                                                <canvas id="shareVoiceChart"></canvas>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -158,6 +265,10 @@
                                     <option value="frames">Sort by Frames</option>
                                      <option value="coverage">Sort by Avg. Coverage</option>
                                      <option value="max_coverage">Sort by Max Coverage</option>
+                                     <option value="prominence_avg_present">Sort by Prominence (avg)</option>
+                                     <option value="prominence_max">Sort by Prominence (max)</option>
+                                     <option value="share_of_voice_avg_present">Sort by Share of Voice (avg)</option>
+                                     <option value="share_of_voice_solo_percentage">Sort by Solo Time (%)</option>
                                     {% endif %}
                                     <option value="name">Sort by Name</option>
                                 </select>
@@ -170,24 +281,133 @@
                             </div>
                         </div>
 
+                        <!-- Advanced Segment Filter -->
+                        {% if file_type == 'video' %}
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="bi bi-funnel"></i> Segment Filter</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">Select Logo</label>
+                                        <select id="segFilterLogo" class="form-select">
+                                            <option value="">All Logos</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">Min Avg Coverage (%)</label>
+                                        <div class="input-group">
+                                            <input type="number" step="0.01" id="segMinCoverage" class="form-control" placeholder="0.00">
+                                            <span class="input-group-text" id="maxCoverageHint">max: --</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label fw-semibold">Min Prominence (0-100)</label>
+                                        <div class="input-group">
+                                            <input type="number" step="0.1" id="segMinProminence" class="form-control" placeholder="0.0">
+                                            <span class="input-group-text" id="maxProminenceHint">max: --</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button id="runSegmentFilter" class="btn btn-primary w-100">
+                                            <i class="bi bi-search"></i> Find Segments
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i> 
+                                        Choose a specific logo or filter all. Find time ranges where conditions are met.
+                                    </small>
+                                </div>
+                                <div id="segmentResults" class="mt-3"></div>
+                            </div>
+                        </div>
+                        
+                        {% endif %}
+
                         <div class="card">
                             <div class="card-header">
                                 <h5><i class="bi bi-table"></i> Detailed Logo Analysis</h5>
+                                <small class="text-muted">All prominence values are out of 100</small>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table class="table table-hover" id="detailedTable">
                                         <thead class="table-dark">
                                             <tr>
-                                                <th>Logo</th>
-                                                <th>Detections</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Brand/logo name">Logo</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Total number of logo detections across all frames">Detections</th>
                                                 {% if file_type == 'video' %}
-                                                <th>Frames</th>
-                                                <th>Time (s)</th>
-                                                <th>Percentage</th>
-                                                <th>Avg. per Frame</th>
-                                                 <th>Avg. Coverage (%)</th>
-                                                 <th>Max Coverage (%)</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Number of frames where this logo appears">Frames</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Total time in seconds this logo is visible">Time (s)</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Percentage of total video duration this logo appears">Percentage</th>
+                                                <th data-bs-toggle="tooltip" data-bs-placement="top" title="Average detections per frame when logo is present">Avg. per Frame</th>
+                                                 <th>
+                                                     <span class="metric-explainer coverage-explainer" data-explainer-title="What is Coverage?">
+                                                         Avg. Coverage (%)
+                                                         <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="coverage-popover" title="What is Coverage?">ⓘ</button>
+                                                         <div id="coverage-popover" class="rich-popover" role="dialog" aria-modal="false" hidden>
+                                                             <div class="popover-content">
+                                                                 <div class="media">
+                                                                     <img class="explain-img" src="/static/results/coverage.png" alt="Coverage definition diagram">
+                                                                 </div>
+                                                                 <div class="copy">
+                                                                     <strong>Coverage</strong> is the percentage of the frame area covered by the logo when it is present.
+                                                                     <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     </span>
+                                                 </th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Maximum percentage of frame area covered by logo in any single frame">Max Coverage (%)</th>
+                                                                                                   <th>
+                                                     <span class="metric-explainer prominence-explainer" data-explainer-title="What is Prominence?">
+                                                          Prominence (avg)
+                                                          <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="prominence-popover" title="What is Prominence?">ⓘ</button>
+                                                          <div id="prominence-popover" class="rich-popover" role="dialog" aria-modal="false" hidden>
+                                                              <div class="popover-content">
+                                                                  <div class="media">
+                                                                      <video
+                                                                          class="explain-vid"
+                                                                          muted
+                                                                          loop
+                                                                          playsinline
+                                                                          preload="none"
+                                                                          poster="/static/results/prominence-poster.jpg"
+                                                                      >
+                                                                          <source src="/static/results/prominence.webm" type="video/webm">
+                                                                          <source src="/static/results/prominence.mp4" type="video/mp4">
+                                                                      </video>
+                                                                  </div>
+                                                                  <div class="copy">
+                                                                      <strong>Prominence</strong> is how visible the brand is within the frame and over time. This example highlights areas that count toward prominence.
+                                                                      <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                      </span>
+                                                  </th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="top" title="Highest prominence score (0-100) achieved in any single frame. Shows peak visibility moment">Prominence (max)</th>
+                                                                                                 <th>
+                                                    <span class="metric-explainer share-of-voice-explainer" data-explainer-title="What is Share of Voice?">
+                                                        Share of Voice (avg)
+                                                        <button class="info-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-of-voice-popover" title="What is Share of Voice?">ⓘ</button>
+                                                        <div id="share-of-voice-popover" class="rich-popover" role="dialog" aria-modal="false" hidden style="left: auto; right: 0;">
+                                                            <div class="popover-content">
+                                                                <div class="media">
+                                                                    <img class="explain-img" src="/static/results/share_of_voice.png" alt="Share of voice definition diagram">
+                                                                </div>
+                                                                <div class="copy">
+                                                                    <strong>Share of Voice</strong> measures whether the brand appears alone or alongside other logos. Higher percentages mean the brand has less competition for attention.
+                                                                    <a class="learn-more" href="#" data-modal-target="#explainer-modal">Learn more</a>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </span>
+                                                </th>
+                                                 <th data-bs-toggle="tooltip" data-bs-placement="left" title="Percentage of brand's total time spent appearing alone (no other brands)">Solo Time (%)</th>
                                                 {% endif %}
                                             </tr>
                                         </thead>
@@ -254,35 +474,23 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5><i class="bi bi-graph-down"></i> Performance Metrics</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <canvas id="performanceChart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
+                            
                         </div>
 
-                        {% if file_type == 'video' %}
-                        <div class="row mt-4">
-                            <div class="col-12">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5><i class="bi bi-speedometer2"></i> Engagement Rate Analysis</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <canvas id="engagementChart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
+                        
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Shared Explainer Modal -->
+    <div id="explainer-modal" class="explain-modal" hidden role="dialog" aria-modal="true" aria-labelledby="explainer-modal-title">
+        <div class="modal-inner">
+            <h3 id="explainer-modal-title"></h3>
+            <div class="explainer-modal-media"></div>
+            <p class="mt-2 explainer-modal-copy"></p>
+            <button type="button" class="btn btn-secondary close-modal">Close</button>
         </div>
     </div>
 

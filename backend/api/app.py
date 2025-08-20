@@ -264,6 +264,26 @@ def get_timeline_stats(file_hash):
         
     return timeline_stats, 200, {'Content-Type': 'application/json'}
 
+@app.route('/api/coverage_per_frame/<file_hash>')
+def get_coverage_per_frame(file_hash):
+    """API endpoint to get per-frame coverage percentages per logo"""
+    coverage_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'coverage_per_frame.json')
+    if not os.path.exists(coverage_path):
+        return jsonify({'error': 'Coverage per frame not found'}), 404
+    with open(coverage_path, 'r') as f:
+        cov = f.read()
+    return cov, 200, {'Content-Type': 'application/json'}
+
+@app.route('/api/prominence_per_frame/<file_hash>')
+def get_prominence_per_frame(file_hash):
+    """API endpoint to get per-frame prominence scores per logo if available"""
+    prom_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'prominence_per_frame.json')
+    if not os.path.exists(prom_path):
+        return jsonify({'error': 'Prominence per frame not found'}), 404
+    with open(prom_path, 'r') as f:
+        prom = f.read()
+    return prom, 200, {'Content-Type': 'application/json'}
+
 @app.route('/api/agent_query/<file_hash>', methods=['POST'])
 def agent_query(file_hash):
     """API endpoint to handle agentic queries"""

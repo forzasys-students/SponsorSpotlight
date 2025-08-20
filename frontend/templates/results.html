@@ -108,7 +108,7 @@
                     <div class="card-header p-0">
                         <ul class="nav nav-tabs card-header-tabs" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="simple-tab" data-bs-toggle="tab" data-bs-target="#tab-simple" type="button" role="tab">Simple</button>
+                                <button class="nav-link active" id="simple-tab" data-bs-toggle="tab" data-bs-target="#tab-simple" type="button" role="tab">Detections on Frame</button>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#tab-advanced" type="button" role="tab">Advanced</button>
@@ -548,17 +548,47 @@
                     sidebar.innerHTML = '<div class="list-group-item text-muted">No detections</div>';
                     return;
                 }
-                sidebar.innerHTML = logos.map(name => `
-                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center simple-class-item ${classSelection.has(name) ? 'active' : ''}" data-class="${name}">
-                        <span>${name}</span>
-                    </button>
-                `).join('');
+
+                // Color palette for different logo classes (shared with drawOverlayForCurrentFrame)
+                const colorPalette = [
+                    '#ff3b30', // Red
+                    '#007aff', // Blue
+                    '#34c759', // Green
+                    '#ff9500', // Orange
+                    '#af52de', // Purple
+                    '#ff2d92', // Pink
+                    '#00c7be', // Teal
+                    '#ffcc00', // Yellow
+                    '#ff6b35', // Coral
+                    '#5ac8fa'  // Light Blue
+                ];
+
+                // Create a map of selected classes to colors
+                const classColors = {};
+                const selectedClasses = Array.from(classSelection);
+                selectedClasses.forEach((className, index) => {
+                    classColors[className] = colorPalette[index % colorPalette.length];
+                });
+
+                sidebar.innerHTML = logos.map(name => {
+                    const isSelected = classSelection.has(name);
+                    const color = isSelected ? classColors[name] : '';
+                    const style = isSelected ? `background-color: ${color}20; border-left: 4px solid ${color}; color: ${color};` : '';
+                    
+                    return `
+                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center simple-class-item ${isSelected ? 'active' : ''}" data-class="${name}" style="${style}">
+                            <span>${name}</span>
+                        </button>
+                    `;
+                }).join('');
+
                 // Bind click toggles
                 document.querySelectorAll('.simple-class-item').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const cls = btn.dataset.class;
                         if (classSelection.has(cls)) classSelection.delete(cls); else classSelection.add(cls);
                         btn.classList.toggle('active');
+                        updateSidebarForCurrentFrame(); // Re-render to update colors
                         drawOverlayForCurrentFrame();
                     });
                 });
@@ -603,6 +633,27 @@
                 const scaleY = rect.height / videoH;
                 const yOffset = -18; // hardcoded vertical nudge
 
+                // Color palette for different logo classes
+                const colorPalette = [
+                    '#ff3b30', // Red
+                    '#007aff', // Blue
+                    '#34c759', // Green
+                    '#ff9500', // Orange
+                    '#af52de', // Purple
+                    '#ff2d92', // Pink
+                    '#00c7be', // Teal
+                    '#ffcc00', // Yellow
+                    '#ff6b35', // Coral
+                    '#5ac8fa'  // Light Blue
+                ];
+
+                // Create a map of selected classes to colors
+                const classColors = {};
+                const selectedClasses = Array.from(classSelection);
+                selectedClasses.forEach((className, index) => {
+                    classColors[className] = colorPalette[index % colorPalette.length];
+                });
+
                 // Current frame index
                 const fps = videoMetadata.fps;
                 const frame = Math.floor((vid.currentTime || 0) * fps);
@@ -613,7 +664,7 @@
                     if (poly.length >= 4) {
                         ctx.save();
                         ctx.lineWidth = 3;
-                        ctx.strokeStyle = '#58a6ff';
+                        ctx.strokeStyle = classColors[det.class];
                         ctx.beginPath();
                         poly.forEach((p, idx) => {
                             const x = p[0] * scaleX;
