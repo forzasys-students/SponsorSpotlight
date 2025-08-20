@@ -8,6 +8,12 @@ class Dashboard {
         this.chartMeta = {};
         this.currentChartType = 'pie';
     }
+    
+    getVideoPlayerUrl(startTime, endTime, logo) {
+        // Create a URL that points back to the results page with timestamp parameters and logo
+        const logoPart = logo ? `&logo=${encodeURIComponent(logo)}` : '';
+        return `/results/${this.fileHash}?t=${startTime}&end=${endTime}${logoPart}`;
+    }
 
     async init() {
         try {
@@ -836,12 +842,19 @@ class Dashboard {
                                 <strong>${r.logo}</strong>
                                 <span class="text-muted ms-2">${toTime(r.start)}s - ${toTime(r.end)}s</span>
                             </div>
-                            <code>frames ${r.start} - ${r.end}</code>
+                            <div>
+                                <code class="me-2">frames ${r.start} - ${r.end}</code>
+                                <a href="${this.getVideoPlayerUrl(toTime(r.start), toTime(r.end), r.logo)}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-play-fill"></i> Watch Segment
+                                </a>
+                            </div>
                         </div>
                     `).join('')}
                 </div>
                 ${results.length > 50 ? `<div class="mt-2 text-muted">Showing first 50 of ${results.length} segments</div>` : ''}
             `;
+
+            // Links will open in same tab by default (no target="_blank")
         });
     }
 

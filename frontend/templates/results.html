@@ -206,6 +206,15 @@
             const video = document.getElementById('mainVideo');
             let videoMetadata = {};
             let logoStats = {};
+            
+            // Check for timestamp parameter in URL (and optional logo)
+            const urlParams = new URLSearchParams(window.location.search);
+            const timeParam = urlParams.get('t');
+            const logoParam = urlParams.get('logo');
+            let startTime = 0;
+            if (timeParam) {
+                startTime = parseFloat(timeParam);
+            }
 
             // Fetch main statistics
             fetch(`/api/stats/${fileHash}`)
@@ -220,6 +229,16 @@
                             if (video.readyState >= 1) { // HAVE_METADATA or higher
                                 videoMetadata.duration = video.duration;
                                 fetchAccurateTimeline();
+                                
+                                // Set video to the specified timestamp if provided
+                                if (startTime > 0 && startTime < video.duration) {
+                                    video.currentTime = startTime;
+                                    // Also set the annotated video if it exists
+                                    const annotatedVideo = document.getElementById('annotatedVideo');
+                                    if (annotatedVideo) {
+                                        annotatedVideo.currentTime = startTime;
+                                    }
+                                }
                             }
                         };
                         video.addEventListener('loadedmetadata', initialize);
@@ -229,6 +248,8 @@
                     }
                 })
                 .catch(handleFetchError);
+
+            // Keep behavior identical to baseline; no extra handlers beyond original
 
             function fetchAccurateTimeline() {
                 fetch(`/api/timeline_stats/${fileHash}`)
@@ -268,6 +289,9 @@
                 globalTimelineData = timelineData || {};
                 const timelineContent = document.getElementById('timeline-content');
                 const timelineLoading = document.getElementById('timeline-loading');
+                
+                // Note: we ignore end time on this page to keep behavior identical,
+                // only honoring the start time for initial seek
 
                 const topLogos = Object.keys(logoStats)
                     .sort((a, b) => (logoStats[b].time || 0) - (logoStats[a].time || 0))
@@ -539,11 +563,16 @@
                 const sidebar = document.getElementById('simple-detections');
                 if (!sidebar || !videoMetadata || !videoMetadata.fps) return;
                 const fps = videoMetadata.fps;
+                // Original behavior: floor current time * fps
                 const frame = Math.floor((video?.currentTime || 0) * fps);
                 if (frame === lastRenderedFrame) return;
                 lastRenderedFrame = frame;
 
                 const logos = (frameToLogosIndex[frame] || []).slice().sort((a,b)=>a.localeCompare(b));
+                // If deep-linked with a specific logo, preselect it once
+                if (classSelection.size === 0 && logoParam && logos.includes(logoParam)) {
+                    classSelection.add(logoParam);
+                }
                 if (logos.length === 0) {
                     sidebar.innerHTML = '<div class="list-group-item text-muted">No detections</div>';
                     return;
@@ -611,6 +640,7 @@
                             frameDetections.set(obj.frame, obj.detections || []);
                         } catch (_) {}
                     });
+                    // Keep default behavior (no forced redraw here)
                 } catch (_) {}
             }
 

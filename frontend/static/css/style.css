@@ -416,6 +416,18 @@ body {
     box-shadow: 0 0 0 2px #007bff;
 }
 
+.timeline-segment.highlight-segment {
+    opacity: 1;
+    box-shadow: 0 0 0 3px #ff9500;
+    animation: pulse-highlight 2s infinite;
+}
+
+@keyframes pulse-highlight {
+    0% { box-shadow: 0 0 0 3px #ff9500; }
+    50% { box-shadow: 0 0 0 5px #ff9500; }
+    100% { box-shadow: 0 0 0 3px #ff9500; }
+}
+
 /* Logo-specific colors - Balanced visualization palette */
 .timeline-segment[data-logo*="GEICO"] { background: #58a6ff; }
 .timeline-segment[data-logo*="Hulu"] { background: #3fb950; }
