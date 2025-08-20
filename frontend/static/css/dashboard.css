@@ -656,6 +656,13 @@
 	margin-top: 0.5rem;
 }
 
+/* Reference info styles */
+.reference-info {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 /* Prominence rich popover and modal */
 .metric-explainer,
 .prominence-explainer {

@@ -327,9 +327,64 @@ class Dashboard {
     initializeDetailed() {
         this.renderDetailedTable();
         this.setupTableFiltering();
+        this.updateReferenceInfo();
         if (this.fileType === 'video') {
             this.setupSegmentFiltering();
         }
+    }
+    
+    updateReferenceInfo() {
+        const infoElement = document.getElementById('reference-info');
+        if (!infoElement) return;
+        
+        if (this.fileType === 'video') {
+            // For videos, show duration and FPS
+            const duration = this.videoMetadata.duration || 0;
+            const fps = this.videoMetadata.fps || 0;
+            const formattedDuration = this.formatDuration(duration);
+            
+            infoElement.innerHTML = `
+                <span class="badge bg-secondary me-1">
+                    <i class="bi bi-clock"></i> Duration: ${formattedDuration}
+                </span>
+                <span class="badge bg-secondary">
+                    <i class="bi bi-film"></i> FPS: ${fps.toFixed(1)}
+                </span>
+            `;
+        } else {
+            // For images, show resolution if available
+            const width = this.videoMetadata.width || 0;
+            const height = this.videoMetadata.height || 0;
+            
+            if (width && height) {
+                infoElement.innerHTML = `
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-image"></i> Resolution: ${width}×${height}
+                    </span>
+                `;
+            } else {
+                infoElement.innerHTML = `
+                    <span class="badge bg-secondary">
+                        <i class="bi bi-image"></i> Image
+                    </span>
+                `;
+            }
+        }
+    }
+    
+    formatDuration(seconds) {
+        if (!seconds || isNaN(seconds)) return '0:00';
+        
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        
+        if (mins >= 60) {
+            const hours = Math.floor(mins / 60);
+            const remainingMins = mins % 60;
+            return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
     renderDetailedTable() {
