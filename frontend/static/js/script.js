@@ -45,10 +45,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Check file size (max 500MB)
-            const maxSize = 500 * 1024 * 1024; // 500MB in bytes
+            // Check file size (max 6GB)
+            const maxSize = 6 * 1024 * 1024 * 1024; // 6GB in bytes
             if (file.size > maxSize) {
-                alert('File is too large. Maximum size is 500MB.');
+                alert('File is too large. Maximum size is 6GB.');
                 this.value = '';
                 return;
             }
