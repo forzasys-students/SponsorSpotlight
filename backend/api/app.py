@@ -30,7 +30,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key_change_in_produ
 app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
 app.config['RESULTS_FOLDER'] = RESULTS_DIR
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'webm'}
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024 * 1024  # 6GB max upload size
 
 # Create upload and results directories if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
