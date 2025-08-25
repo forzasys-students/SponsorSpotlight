@@ -70,11 +70,20 @@ class InferenceManager:
         # Pipeline config: toggle video generation and H.264 conversion
         self.generate_videos = True
         self.convert_h264 = True
+        self.batch_size = 1
+        self.precision = "fp32"  # Default to FP32 for compatibility
         try:
             with open(os.path.join(self.base_dir, 'pipeline_config.json'), 'r') as f:
                 cfg = json.load(f) or {}
                 self.generate_videos = bool(cfg.get('generate_videos', True))
                 self.convert_h264 = bool(cfg.get('convert_h264', True))
+                # Optional batch size for batched inference (>=1)
+                try:
+                    self.batch_size = max(1, int(cfg.get('batch_size', 1)))
+                except Exception:
+                    self.batch_size = 1
+                # Model precision: fp16 for speed, fp32 for compatibility
+                self.precision = str(cfg.get('precision', 'fp32')).lower()
         except Exception:
             # Defaults remain True if config missing/unreadable
             pass
@@ -115,11 +124,26 @@ class InferenceManager:
             # Load the model
             self.model = YOLO(self.model_path).to(device)
             
-            self.progress.update_progress(
-                ProgressStage.MODEL_READY,
-                f"Model loaded on {device}"
-            )
-            
+            # Apply precision optimization if specified
+            if self.precision == "fp16":
+                try:
+                    self.model.model.half()  # Convert to FP16
+                    print(f"Model loaded on {device} with FP16 precision")
+                    self.progress.update_progress(
+                        ProgressStage.MODEL_READY,
+                        f"Model loaded on {device} with FP16 precision"
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to convert to FP16: {e}, falling back to FP32")
+                    self.progress.update_progress(
+                        ProgressStage.MODEL_READY,
+                        f"Model loaded on {device} with FP32 precision (FP16 failed)"
+                    )
+            else:
+                self.progress.update_progress(
+                    ProgressStage.MODEL_READY,
+                    f"Model loaded on {device} with {self.precision.upper()} precision"
+                )
             return True
         except Exception as e:
             self.progress.update_progress(
@@ -127,6 +151,33 @@ class InferenceManager:
                 f"Failed to load model: {str(e)}"
             )
             return False
+
+    def _infer_batch(self, frames):
+        """Run inference on a list of frames with graceful OOM fallback.
+        Returns a list of Results objects, one per frame.
+        """
+        if not isinstance(frames, (list, tuple)) or len(frames) == 0:
+            return []
+        try:
+            results = self.model(frames)
+            # Ultralytics returns a list of Results objects (len == len(frames))
+            return results
+        except torch.cuda.OutOfMemoryError:
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            # Fallback to per-frame inference
+            results_per_frame = []
+            for fr in frames:
+                res_single = self.model(fr)
+                # res_single is typically a list with one Results element
+                if isinstance(res_single, list) and len(res_single) > 0:
+                    results_per_frame.append(res_single[0])
+                else:
+                    results_per_frame.append(res_single)
+            return results_per_frame
     
     def start_inference(self, mode, input_path, file_hash):
         """Start the inference process in a separate thread"""
@@ -334,45 +385,74 @@ class InferenceManager:
         # Prepare per-frame detections JSONL writer
         detections_jsonl_path = os.path.join(result_dir, 'frame_detections.jsonl')
         with open(detections_jsonl_path, 'w') as detections_writer:
-            # Process each frame
+            # Process frames in batches
             detection_start = time.time()
             self.gpu_manager.start_sampling()
-            
+
             frame_count = 0
+            frames_buffer = []
+            indices_buffer = []
+
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
+                    # Flush remaining frames in buffer
+                    if len(frames_buffer) > 0:
+                        results_batch = self._infer_batch(frames_buffer)
+                        for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
+                            per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
+                            per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
+                            detections_writer.write(json.dumps({
+                                "frame": frm_idx,
+                                "time": round(frm_idx * stats_calculator.frame_time, 3),
+                                "detections": per_frame_detections
+                            }) + "\n")
+                            if raw_out is not None:
+                                raw_out.write(frm)
+                            if out is not None:
+                                annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                                out.write(annotated_frame)
+                            progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
+                            self.progress.update_progress(
+                                ProgressStage.INFERENCE_PROGRESS,
+                                f"Processing frame {frm_idx}/{total_frames} ({round(progress_percentage)}%)",
+                                frame=frm_idx,
+                                total_frames=total_frames,
+                                progress_percentage=progress_percentage,
+                                gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
+                            )
                     break
-                
+
                 frame_count += 1
-                results = self.model(frame)
-                
-                per_frame_detections = stats_calculator.process_frame(frame_count, frame, results)
+                frames_buffer.append(frame)
+                indices_buffer.append(frame_count)
 
-                # Write per-frame detections line (time in seconds)
-                detections_writer.write(json.dumps({
-                    "frame": frame_count,
-                    "time": round(frame_count * stats_calculator.frame_time, 3),
-                    "detections": per_frame_detections
-                }) + "\n")
-
-                # Write raw frame then annotated frame (optional)
-                if raw_out is not None:
-                    raw_out.write(frame)
-                if out is not None:
-                    annotated_frame = self.annotator.annotate_frame(frame, results)
-                    out.write(annotated_frame)
-                
-                # Update progress
-                progress_percentage = (frame_count / total_frames) * 100 if total_frames > 0 else 0
-                self.progress.update_progress(
-                    ProgressStage.INFERENCE_PROGRESS,
-                    f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
-                    frame=frame_count,
-                    total_frames=total_frames,
-                    progress_percentage=progress_percentage,
-                    gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                )
+                if len(frames_buffer) >= self.batch_size:
+                    results_batch = self._infer_batch(frames_buffer)
+                    for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
+                        per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
+                        per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
+                        detections_writer.write(json.dumps({
+                            "frame": frm_idx,
+                            "time": round(frm_idx * stats_calculator.frame_time, 3),
+                            "detections": per_frame_detections
+                        }) + "\n")
+                        if raw_out is not None:
+                            raw_out.write(frm)
+                        if out is not None:
+                            annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                            out.write(annotated_frame)
+                        progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
+                        self.progress.update_progress(
+                            ProgressStage.INFERENCE_PROGRESS,
+                            f"Processing frame {frm_idx}/{total_frames} ({round(progress_percentage)}%)",
+                            frame=frm_idx,
+                            total_frames=total_frames,
+                            progress_percentage=progress_percentage,
+                            gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
+                        )
+                    frames_buffer.clear()
+                    indices_buffer.clear()
         
         # Clean up
         cap.release()
@@ -530,40 +610,72 @@ class InferenceManager:
             detection_start = time.time()
             self.gpu_manager.start_sampling()
 
+            frames_buffer = []
+            indices_buffer = []
+
             while True:
                 raw = pipe.stdout.read(width * height * 3)
                 if not raw:
+                    # Flush any remaining buffered frames
+                    if len(frames_buffer) > 0:
+                        results_batch = self._infer_batch(frames_buffer)
+                        for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
+                            per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
+                            per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
+                            detections_writer.write(json.dumps({
+                                "frame": frm_idx,
+                                "time": round(frm_idx * stats_calculator.frame_time, 3),
+                                "detections": per_frame_detections
+                            }) + "\n")
+                            if raw_out is not None:
+                                raw_out.write(frm)
+                            if out is not None:
+                                annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                                out.write(annotated_frame)
+                            progress_pct = (frm_idx / estimated_total_frames * 100) if estimated_total_frames else 0
+                            progress_pct = min(100, max(0, progress_pct))
+                            self.progress.update_progress(
+                                ProgressStage.INFERENCE_PROGRESS,
+                                f"Processing frame {frm_idx}{f' (~{round(progress_pct)}%)' if estimated_total_frames else ''}",
+                                frame=frm_idx,
+                                total_frames=estimated_total_frames,
+                                progress_percentage=progress_pct,
+                                gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
+                            )
                     break
                 frame = np.frombuffer(raw, dtype='uint8').reshape((height, width, 3))
                 frame_count += 1
 
-                results = self.model(frame)
-                
-                per_frame_detections = stats_calculator.process_frame(frame_count, frame, results)
+                frames_buffer.append(frame)
+                indices_buffer.append(frame_count)
 
-                detections_writer.write(json.dumps({
-                    "frame": frame_count,
-                    "time": round(frame_count * stats_calculator.frame_time, 3),
-                    "detections": per_frame_detections
-                }) + "\n")
-
-                if raw_out is not None:
-                    raw_out.write(frame)
-                if out is not None:
-                    annotated_frame = self.annotator.annotate_frame(frame, results)
-                    out.write(annotated_frame)
-
-                progress_pct = (frame_count / estimated_total_frames * 100) if estimated_total_frames else 0
-                progress_pct = min(100, max(0, progress_pct))
-                
-                self.progress.update_progress(
-                    ProgressStage.INFERENCE_PROGRESS,
-                    f"Processing frame {frame_count}{f' (~{round(progress_pct)}%)' if estimated_total_frames else ''}",
-                    frame=frame_count,
-                    total_frames=estimated_total_frames,
-                    progress_percentage=progress_pct,
-                    gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                )
+                if len(frames_buffer) >= self.batch_size:
+                    results_batch = self._infer_batch(frames_buffer)
+                    for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
+                        per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
+                        per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
+                        detections_writer.write(json.dumps({
+                            "frame": frm_idx,
+                            "time": round(frm_idx * stats_calculator.frame_time, 3),
+                            "detections": per_frame_detections
+                        }) + "\n")
+                        if raw_out is not None:
+                            raw_out.write(frm)
+                        if out is not None:
+                            annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                            out.write(annotated_frame)
+                        progress_pct = (frm_idx / estimated_total_frames * 100) if estimated_total_frames else 0
+                        progress_pct = min(100, max(0, progress_pct))
+                        self.progress.update_progress(
+                            ProgressStage.INFERENCE_PROGRESS,
+                            f"Processing frame {frm_idx}{f' (~{round(progress_pct)}%)' if estimated_total_frames else ''}",
+                            frame=frm_idx,
+                            total_frames=estimated_total_frames,
+                            progress_percentage=progress_pct,
+                            gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
+                        )
+                    frames_buffer.clear()
+                    indices_buffer.clear()
 
             pipe.stdout.close()
             pipe.wait()
