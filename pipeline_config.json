@@ -1,5 +1,5 @@
 {
-  "generate_videos": false,
-  "convert_h264": false
+  "generate_videos": true,
+  "convert_h264": true
 }
 

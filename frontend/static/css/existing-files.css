@@ -1,0 +1,57 @@
+/* Existing Files Page Styles */
+
+.file-card {
+    transition: transform 0.2s;
+}
+
+.file-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.file-card.border-success {
+    border-width: 2px !important;
+}
+
+.file-size {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+.file-type-badge {
+    font-size: 0.8em;
+}
+
+.processed-indicator {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+.summary-card {
+    transition: all 0.3s ease;
+}
+
+.summary-card:hover {
+    transform: scale(1.05);
+}
+
+.url-file-card {
+    border-left: 4px solid #17a2b8 !important;
+}
+
+.url-file-card .card-body {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.url-badge {
+    background: linear-gradient(45deg, #17a2b8, #20c997);
+    color: white;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8em;
+    font-weight: 500;
+}

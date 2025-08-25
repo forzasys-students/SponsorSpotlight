@@ -83,14 +83,14 @@
                                 <div class="video-result-container">
                                     {% if output_path %}
                                     <video id="annotatedVideo" controls class="w-100 rounded" poster="">
-                                        <source src="{{ url_for('static', filename=output_path.replace('.mp4', '_web.mp4')) }}" type="video/mp4">
+                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/output_web.mp4') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                     {% else %}
-                                    <div class="alert alert-warning text-center">
-                                        <i class="bi bi-exclamation-triangle-fill"></i>
-                                        Annotated video is not available.
-                                    </div>
+                                        <div class="alert alert-warning text-center">
+                                            <i class="bi bi-exclamation-triangle-fill"></i>
+                                            Annotated video is not available.
+                                        </div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -462,11 +462,16 @@
                 };
 
                 const setCurrentTimeFromClientX = (clientX) => {
-                    if (!ruler || !video || !totalDuration) return;
+                    if (!ruler || !totalDuration) return;
                     const rect = ruler.getBoundingClientRect();
                     const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
                     const t = pct * totalDuration;
-                    video.currentTime = t;
+                    
+                    if (video) {
+                        video.currentTime = t;
+                    }
+                    
+                    const annotatedVideo = document.getElementById('annotatedVideo');
                     if (annotatedVideo) annotatedVideo.currentTime = t;
                     updatePlayhead();
                 };
@@ -474,8 +479,10 @@
                 segments.forEach(segment => {
                     segment.addEventListener('click', function(e) {
                         const startTime = parseFloat(this.dataset.start);
-                        if (video && !isNaN(startTime)) {
-                            video.currentTime = startTime;
+                        if (!isNaN(startTime)) {
+                            if (video) {
+                                video.currentTime = startTime;
+                            }
                             updatePlayhead();
                         }
                         segments.forEach(s => s.classList.remove('active'));
@@ -527,10 +534,16 @@
 
                 // Update playhead as video plays (aligned to ruler start)
                 function updatePlayhead() {
-                    if (!video || !playhead || !totalDuration || !ruler || !wrapper) return;
+                    if (!playhead || !totalDuration || !ruler || !wrapper) return;
+                    
+                    let currentTime = 0;
+                    if (video) {
+                        currentTime = video.currentTime || 0;
+                    }
+                    
                     const wrapperRect = wrapper.getBoundingClientRect();
                     const rulerRect = ruler.getBoundingClientRect();
-                    const pct = Math.min(1, Math.max(0, video.currentTime / totalDuration));
+                    const pct = Math.min(1, Math.max(0, currentTime / totalDuration));
                     const leftPx = (rulerRect.left - wrapperRect.left) + pct * rulerRect.width;
                     playhead.style.left = `${leftPx}px`;
                 }
@@ -539,6 +552,7 @@
                         updatePlayhead();
                         updateSidebarForCurrentFrame();
                         // Attempt to keep other media in sync
+                        const annotatedVideo = document.getElementById('annotatedVideo');
                         if (annotatedVideo && !isDragging) {
                             const drift = Math.abs((annotatedVideo.currentTime || 0) - (video.currentTime || 0));
                             if (drift > 0.12) annotatedVideo.currentTime = video.currentTime;
@@ -553,6 +567,7 @@
                 }
 
                 // Also mirror actions initiated on the annotated player back to raw player and timeline
+                const annotatedVideo = document.getElementById('annotatedVideo');
                 if (annotatedVideo) {
                     annotatedVideo.addEventListener('timeupdate', () => {
                         if (!video || isDragging) return;
