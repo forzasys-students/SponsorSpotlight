@@ -36,7 +36,10 @@
                                 </div>
                                 
                                 <div id="time-info" class="text-center text-muted">
-                                    Time elapsed: <span id="elapsed-time">00:00</span>
+                                    Processing time (AI detection): <span id="elapsed-time">00:00</span>
+                                </div>
+                                <div id="gpu-info" class="text-center text-muted mt-1" style="display:none;">
+                                    Peak GPU used: <span id="gpu-peak">0</span> MB
                                 </div>
                             </div>
                             
@@ -67,6 +70,8 @@
             const errorContainer = document.getElementById('error-container');
             const errorMessage = document.getElementById('error-message');
             const frameInfo = document.getElementById('frame-info');
+            const gpuInfo = document.getElementById('gpu-info');
+            const gpuPeak = document.getElementById('gpu-peak');
             
             // For image processing, hide the frame info
             if ('{{ file_type }}' === 'image') {
@@ -107,6 +112,12 @@
                         // Update elapsed time
                         if (data.elapsed_time) {
                             elapsedTime.textContent = formatTime(data.elapsed_time);
+                        }
+
+                        // Update GPU peak usage if available
+                        if (data.gpu_peak_mb !== undefined && data.gpu_peak_mb !== null) {
+                            gpuInfo.style.display = 'block';
+                            gpuPeak.textContent = Math.round(data.gpu_peak_mb);
                         }
                         
                         // Check for completion or error

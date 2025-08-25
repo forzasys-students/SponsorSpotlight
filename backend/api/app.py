@@ -153,6 +153,20 @@ def upload_file():
             file_type = 'image'
         else:
             file_type = 'video'
+
+        # If results already exist, reuse them
+        result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
+        out_ext = 'jpg' if file_type == 'image' else 'mp4'
+        output_path = os.path.join(result_dir, f'output.{out_ext}')
+        stats_path = os.path.join(result_dir, 'stats.json')
+        if os.path.exists(output_path) and os.path.exists(stats_path):
+            session['file_info'] = {
+                'path': file_path,
+                'type': file_type,
+                'hash': file_hash,
+                'original_name': filename
+            }
+            return redirect(url_for('show_results', file_hash=file_hash))
         
         # Store file info in session
         session['file_info'] = {
@@ -174,6 +188,13 @@ def process_file():
     if not file_info:
         flash('No file uploaded')
         return redirect(url_for('index'))
+    # If results already exist, skip processing and go to results
+    result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_info['hash'])
+    out_ext = 'jpg' if file_info['type'] == 'image' else 'mp4'
+    output_path = os.path.join(result_dir, f'output.{out_ext}')
+    stats_path = os.path.join(result_dir, 'stats.json')
+    if os.path.exists(output_path) and os.path.exists(stats_path):
+        return redirect(url_for('show_results', file_hash=file_info['hash']))
     
     # Start processing in a separate thread
     inference_manager.start_inference(
@@ -184,6 +205,70 @@ def process_file():
     
     return render_template('processing.html', file_type=file_info['type'])
 
+@app.route('/process_existing/<filename>')
+def process_existing_file(filename):
+    """Process an existing file that's already in the uploads directory"""
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    if not os.path.exists(file_path):
+        flash(f'File {filename} not found in uploads directory')
+        return redirect(url_for('index'))
+    
+    if not allowed_file(filename):
+        flash('File type not allowed')
+        return redirect(url_for('index'))
+    
+    # Generate a hash for the existing file
+    file_hash = get_file_hash(file_path)
+    
+    # Determine if it's an image or video
+    file_extension = filename.rsplit('.', 1)[1].lower()
+    if file_extension in ['jpg', 'jpeg', 'png', 'gif']:
+        file_type = 'image'
+    else:
+        file_type = 'video'
+    
+    # If results already exist, reuse them
+    result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
+    out_ext = 'jpg' if file_type == 'image' else 'mp4'
+    output_path = os.path.join(result_dir, f'output.{out_ext}')
+    stats_path = os.path.join(result_dir, 'stats.json')
+    if os.path.exists(output_path) and os.path.exists(stats_path):
+        session['file_info'] = {
+            'path': file_path,
+            'type': file_type,
+            'hash': file_hash,
+            'original_name': filename
+        }
+        return redirect(url_for('show_results', file_hash=file_hash))
+
+    # Store file info in session and process
+    session['file_info'] = {
+        'path': file_path,
+        'type': file_type,
+        'hash': file_hash,
+        'original_name': filename
+    }
+    return redirect(url_for('process_file'))
+
+@app.route('/list_existing_files')
+def list_existing_files():
+    """List all existing files in the uploads directory"""
+    files = []
+    for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+        if allowed_file(filename):
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.isfile(file_path):
+                file_size = os.path.getsize(file_path)
+                file_size_mb = round(file_size / (1024 * 1024), 2)
+                files.append({
+                    'filename': filename,
+                    'size_mb': file_size_mb,
+                    'type': 'video' if filename.rsplit('.', 1)[1].lower() in ['mp4', 'avi', 'mov', 'webm'] else 'image'
+                })
+    
+    return render_template('existing_files.html', files=files)
+
 @app.route('/progress')
 def get_progress():
     """API endpoint to get the current processing progress"""
@@ -192,32 +277,28 @@ def get_progress():
 
 @app.route('/results/<file_hash>')
 def show_results(file_hash):
-    """Show the results page for a processed file"""
-    file_info = session.get('file_info')
-    if not file_info or file_info['hash'] != file_hash:
-        flash('Invalid file or session expired')
-        return redirect(url_for('index'))
-    
-    # Determine the file extension based on file type
-    extension = "jpg" if file_info["type"] == "image" else "mp4"
-    
-    # Construct the paths to the results
-    output_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, f'output.{extension}')
-    stats_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'stats.json')
-    
-    # Check if the result files exist
-    if not os.path.exists(output_path) or not os.path.exists(stats_path):
+    """Show the results page for a processed file, even if session is missing."""
+    result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
+    video_out = os.path.join(result_dir, 'output.mp4')
+    image_out = os.path.join(result_dir, 'output.jpg')
+    stats_path = os.path.join(result_dir, 'stats.json')
+    if not os.path.exists(stats_path):
         flash('Results not found. The file may still be processing or an error occurred.')
         return redirect(url_for('index'))
-    
-    # Create the relative path for the template
-    output_rel_path = os.path.join('results', file_hash, f'output.{extension}')
-    
+
+    is_video = os.path.exists(video_out)
+    has_media = os.path.exists(video_out) or os.path.exists(image_out)
+    extension = 'mp4' if is_video else 'jpg'
+    output_rel_path = os.path.join('results', file_hash, f'output.{extension}') if has_media else None
+    file_info = session.get('file_info') or {}
+    file_type = file_info.get('type') or ('video' if is_video else 'image')
+    original_name = file_info.get('original_name') or f'{file_hash}.{extension}'
+
     return render_template('results.html', 
-                          file_type=file_info['type'],
+                          file_type=file_type,
                           output_path=output_rel_path,
                           file_hash=file_hash,
-                          original_name=file_info['original_name'])
+                          original_name=original_name)
 
 @app.route('/dashboard/<file_hash>')
 def show_dashboard(file_hash):
@@ -245,11 +326,48 @@ def get_stats(file_hash):
     
     if not os.path.exists(stats_path):
         return jsonify({'error': 'Statistics not found'}), 404
-    
-    with open(stats_path, 'r') as f:
-        stats = f.read()
-    
-    return stats, 200, {'Content-Type': 'application/json'}
+    # Attempt to load JSON so we can include processing_info if present (or sidecar)
+    try:
+        with open(stats_path, 'r') as f:
+            data = json.load(f)
+    except Exception:
+        with open(stats_path, 'r') as f:
+            raw = f.read()
+        return raw, 200, {'Content-Type': 'application/json'}
+    if isinstance(data, dict) and 'processing_info' not in data:
+        meta_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'processing_meta.json')
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, 'r') as mf:
+                    meta = json.load(mf)
+                if isinstance(meta, dict) and 'processing_info' in meta:
+                    data['processing_info'] = meta['processing_info']
+            except Exception:
+                pass
+    return json.dumps(data), 200, {'Content-Type': 'application/json'}
+
+@app.route('/api/processing_info/<file_hash>')
+def get_processing_info(file_hash):
+    """Return processing device/time info if available."""
+    stats_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'stats.json')
+    if os.path.exists(stats_path):
+        try:
+            with open(stats_path, 'r') as f:
+                data = json.load(f)
+            if isinstance(data, dict) and 'processing_info' in data:
+                return jsonify(data['processing_info'])
+        except Exception:
+            pass
+    meta_path = os.path.join(app.config['RESULTS_FOLDER'], file_hash, 'processing_meta.json')
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, 'r') as f:
+                meta = json.load(f)
+            if isinstance(meta, dict) and 'processing_info' in meta:
+                return jsonify(meta['processing_info'])
+        except Exception:
+            pass
+    return jsonify({'error': 'Processing info not found'}), 404
 
 @app.route('/api/timeline_stats/<file_hash>')
 def get_timeline_stats(file_hash):

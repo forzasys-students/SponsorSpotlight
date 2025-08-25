@@ -32,6 +32,15 @@
 
                         <p class="lead">Upload an image or video to detect brand logos.</p>
                         
+                        <!-- Existing Files Button -->
+                        <div class="mb-4">
+                            <a href="{{ url_for('list_existing_files') }}" class="btn btn-outline-primary">
+                                <i class="fas fa-folder-open me-2"></i>
+                                View Existing Files
+                            </a>
+                            <small class="text-muted d-block mt-1">Process files already uploaded to the server</small>
+                        </div>
+                        
                         <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-4">
                             <div id="fileSection" class="disable-wrapper mb-3">
                                 <label for="file" class="form-label">Select File</label>

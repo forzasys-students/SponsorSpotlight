@@ -90,3 +90,6 @@ config.ini
 
 # Training data
 train/ready-training
+
+# Video files
+video.mp4

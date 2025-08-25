@@ -35,6 +35,16 @@
                     </div>
                 </div>
 
+                <!-- Processing metadata (device, detection-only duration, GPU utilization) -->
+                <div id="processing-meta" class="alert alert-secondary py-2 px-3 small d-none">
+                    <div class="d-flex flex-wrap gap-3 align-items-center mb-1">
+                        <span><i class="bi bi-cpu"></i> <strong>Device:</strong> <span id="pm-device">-</span></span>
+                        <span class="d-none" id="pm-device-name-wrap"><strong>Name:</strong> <span id="pm-device-name">-</span></span>
+                        <span class="d-none" id="pm-gpu-util-wrap"><strong>Peak GPU Utilization:</strong> <span id="pm-gpu-util">-</span></span>
+                        <span><i class="bi bi-stopwatch"></i> <strong>AI detection time:</strong> <span id="pm-detect-duration">-</span></span>
+                    </div>
+                </div>
+
                 <!-- Main result container -->
                 <div class="card result-card">
                     <div class="card-body p-0">
@@ -54,19 +64,34 @@
                         <div class="tab-content p-3 pt-2">
                             <div class="tab-pane fade show active" id="tab-ondemand" role="tabpanel" aria-labelledby="tab-ondemand-link">
                                 <div class="video-result-container position-relative">
+                                    {% if output_path %}
                                     <video id="mainVideo" controls class="w-100 rounded" poster="">
-                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/raw.mp4') }}" type="video/mp4">
+                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/raw_web.mp4') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                     <canvas id="overlayCanvas" class="position-absolute top-0 start-0"></canvas>
+                                {% else %}
+                                    <div class="alert alert-warning text-center">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        Video preview not available. The video file may not have been generated correctly.
+                                        However, all statistics and timeline data are still available.
+                                    </div>
+                                {% endif %}
                                 </div>
                             </div>
                             <div class="tab-pane fade" id="tab-annotated" role="tabpanel" aria-labelledby="tab-annotated-link">
                                 <div class="video-result-container">
+                                    {% if output_path %}
                                     <video id="annotatedVideo" controls class="w-100 rounded" poster="">
-                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/output.mp4') }}" type="video/mp4">
+                                        <source src="{{ url_for('static', filename=output_path.replace('.mp4', '_web.mp4')) }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
+                                    {% else %}
+                                    <div class="alert alert-warning text-center">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        Annotated video is not available.
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -179,7 +204,7 @@
                         <i class="bi bi-arrow-left"></i> Process Another File
                     </a>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-outline-secondary" onclick="downloadResults()">
+                        <button class="btn btn-outline-secondary" onclick="downloadResults()" {% if not output_path %}disabled{% endif %}>
                             <i class="bi bi-download"></i> Download
                         </button>
                         <a href="{{ url_for('show_dashboard', file_hash=file_hash) }}" class="btn btn-success">
@@ -206,6 +231,28 @@
             const video = document.getElementById('mainVideo');
             let videoMetadata = {};
             let logoStats = {};
+            // Fetch processing info
+            fetch(`/api/processing_info/${fileHash}`).then(r=>r.json()).then(info=>{
+                if (!info || info.error) return;
+                const wrap = document.getElementById('processing-meta');
+                const d = document.getElementById('pm-device');
+                const dnw = document.getElementById('pm-device-name-wrap');
+                const dn = document.getElementById('pm-device-name');
+                const guW = document.getElementById('pm-gpu-util-wrap');
+                const gu = document.getElementById('pm-gpu-util');
+                const durDetect = document.getElementById('pm-detect-duration');
+                const fmtDur = s => {
+                    if (!s || isNaN(s)) return '-';
+                    const m = Math.floor(s/60); const sec = Math.round(s%60);
+                    return `${m}m ${sec}s`;
+                };
+                d.textContent = (info.device || '').toUpperCase() || '-';
+                if (info.device_name) { dnw.classList.remove('d-none'); dn.textContent = info.device_name; }
+                if (typeof info.gpu_peak_utilization_pct === 'number') { guW.classList.remove('d-none'); gu.textContent = `${info.gpu_peak_utilization_pct}%`; }
+                const detectSec = (typeof info.detection_duration_sec === 'number') ? info.detection_duration_sec : info.duration_sec;
+                durDetect.textContent = fmtDur(detectSec);
+                wrap.classList.remove('d-none');
+            }).catch(()=>{});
             
             // Check for timestamp parameter in URL (and optional logo)
             const urlParams = new URLSearchParams(window.location.search);
@@ -224,26 +271,30 @@
                     logoStats = data.logo_stats || {};
                     updateQuickStats(logoStats);
 
-                    if (fileType === 'video' && video) {
-                        const initialize = () => {
-                            if (video.readyState >= 1) { // HAVE_METADATA or higher
-                                videoMetadata.duration = video.duration;
-                                fetchAccurateTimeline();
-                                
+                    if (fileType === 'video') {
+                        // Use metadata from stats as the source of truth for duration
+                        if (videoMetadata && videoMetadata.duration > 0) {
+                            fetchAccurateTimeline();
+                        } else {
+                             document.getElementById('timeline-loading').innerHTML = '<div class="alert alert-danger">Could not load video metadata from stats. Timeline is unavailable.</div>';
+                        }
+                        
+                        // If video player exists, attach listeners
+                        if (video) {
+                            const initializeVideo = () => {
                                 // Set video to the specified timestamp if provided
                                 if (startTime > 0 && startTime < video.duration) {
                                     video.currentTime = startTime;
-                                    // Also set the annotated video if it exists
                                     const annotatedVideo = document.getElementById('annotatedVideo');
                                     if (annotatedVideo) {
                                         annotatedVideo.currentTime = startTime;
                                     }
                                 }
+                            };
+                            video.addEventListener('loadedmetadata', initializeVideo);
+                            if (video.readyState >= 1) { // HAVE_METADATA
+                                initializeVideo();
                             }
-                        };
-                        video.addEventListener('loadedmetadata', initialize);
-                        if (video.readyState >= 1) {
-                            initialize();
                         }
                     }
                 })
@@ -255,6 +306,7 @@
                 fetch(`/api/timeline_stats/${fileHash}`)
                     .then(response => response.json())
                     .then(timelineData => {
+                        // Pass the reliable metadata from stats file
                         generateAccurateTimeline(timelineData, videoMetadata);
                     })
                     .catch(error => {
@@ -303,6 +355,10 @@
                 }
 
                 const duration = metadata.duration;
+                if (!duration || duration <= 0) {
+                    timelineLoading.innerHTML = '<div class="alert alert-warning">Video duration is unknown. Cannot render timeline.</div>';
+                    return;
+                }
                 let timelineHTML = `
                     <div class="timeline-wrapper">
                         <div class="timeline-header">
@@ -769,7 +825,7 @@
             
             // Create a temporary link to download the processed file
             const link = document.createElement('a');
-            link.href = '{{ url_for("static", filename=output_path) }}';
+            link.href = '{{ url_for("static", filename=output_path) if output_path else "#" }}';
             link.download = `processed_${fileHash}.${extension}`;
             document.body.appendChild(link);
             link.click();

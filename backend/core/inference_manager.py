@@ -25,6 +25,16 @@ class InferenceManager:
         """Initialize the inference manager with optional progress tracking"""
         self.progress = progress_manager or ProgressManager()
         self.model = None
+        self.device = 'cpu'
+        self.device_name = None
+        self.gpu_total_mem_bytes = None
+        # GPU utilization sampling state
+        self._gpu_util_sampler_thread = None
+        self._gpu_util_sampling_active = False
+        self.gpu_peak_util_pct = None
+        # Track running jobs to avoid duplicates (guarded by a lock)
+        self._job_lock = threading.Lock()
+        self._active_job_key = None  # tuple: (mode, input_path, file_hash)
         
         # Get base directory
         self.base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -55,6 +65,18 @@ class InferenceManager:
         
         # Setup output directories
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Pipeline config: toggle video generation and H.264 conversion
+        self.generate_videos = True
+        self.convert_h264 = True
+        try:
+            with open(os.path.join(self.base_dir, 'pipeline_config.json'), 'r') as f:
+                cfg = json.load(f) or {}
+                self.generate_videos = bool(cfg.get('generate_videos', True))
+                self.convert_h264 = bool(cfg.get('convert_h264', True))
+        except Exception:
+            # Defaults remain True if config missing/unreadable
+            pass
     
     def _load_logo_groups(self):
         """Load logo groups mapping from the existing project"""
@@ -89,7 +111,24 @@ class InferenceManager:
             
             # Get the best available device
             device = self._get_device()
-            
+            self.device = device
+            try:
+                if device == 'cuda':
+                    self.device_name = torch.cuda.get_device_name(0)
+                    props = torch.cuda.get_device_properties(0)
+                    self.gpu_total_mem_bytes = getattr(props, 'total_memory', None)
+                elif device == 'mps':
+                    self.device_name = 'Apple MPS'
+                else:
+                    # CPU
+                    try:
+                        import platform
+                        self.device_name = platform.processor() or 'CPU'
+                    except Exception:
+                        self.device_name = 'CPU'
+            except Exception:
+                pass
+
             # Load the model
             self.model = YOLO(self.model_path).to(device)
             
@@ -114,13 +153,79 @@ class InferenceManager:
             return 'mps'
         else:
             return 'cpu'
+
+    def _query_gpu_utilization_pct(self) -> int:
+        """Return current GPU utilization percent (0-100) if available, else None."""
+        if self.device != 'cuda':
+            return None
+        # Try NVML first
+        try:
+            import pynvml  # type: ignore
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            return int(getattr(util, 'gpu', None) or 0)
+        except Exception:
+            pass
+        # Fallback to nvidia-smi
+        try:
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
+                capture_output=True, text=True, timeout=1
+            )
+            if result.returncode == 0:
+                line = (result.stdout or '').strip().splitlines()[0]
+                return int(line)
+        except Exception:
+            pass
+        return None
+
+    def _start_gpu_utilization_sampling(self):
+        if self.device != 'cuda':
+            self.gpu_peak_util_pct = None
+            return
+        self.gpu_peak_util_pct = 0
+        self._gpu_util_sampling_active = True
+        def _sampler():
+            while self._gpu_util_sampling_active:
+                try:
+                    util = self._query_gpu_utilization_pct()
+                    if util is not None:
+                        self.gpu_peak_util_pct = max(self.gpu_peak_util_pct or 0, int(util))
+                except Exception:
+                    pass
+                time.sleep(0.5)
+        try:
+            self._gpu_util_sampler_thread = threading.Thread(target=_sampler, daemon=True)
+            self._gpu_util_sampler_thread.start()
+        except Exception:
+            self._gpu_util_sampling_active = False
+
+    def _stop_gpu_utilization_sampling(self):
+        try:
+            self._gpu_util_sampling_active = False
+            t = getattr(self, '_gpu_util_sampler_thread', None)
+            if t and t.is_alive():
+                t.join(timeout=1.5)
+        except Exception:
+            pass
     
     def start_inference(self, mode, input_path, file_hash):
         """Start the inference process in a separate thread"""
-        thread = threading.Thread(
-            target=self._run_inference,
-            args=(mode, input_path, file_hash)
-        )
+        job_key = (mode, input_path, file_hash)
+        with self._job_lock:
+            # If same job is already active, don't start another
+            if self._active_job_key == job_key:
+                return
+            # Mark active and start
+            self._active_job_key = job_key
+        def _runner():
+            try:
+                self._run_inference(mode, input_path, file_hash)
+            finally:
+                with self._job_lock:
+                    self._active_job_key = None
+        thread = threading.Thread(target=_runner)
         thread.daemon = True
         thread.start()
     
@@ -215,6 +320,12 @@ class InferenceManager:
     
     def _process_image(self, image_path, file_hash):
         """Process an image for logo detection"""
+        start_time = time.time()
+        if self.device == 'cuda':
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except Exception:
+                pass
         # Create a dedicated directory for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
@@ -225,16 +336,23 @@ class InferenceManager:
         
         # Load and process the image
         image = cv2.imread(image_path)
+        # Start detection-only timers and GPU util sampling
+        detection_start = time.time()
+        self._start_gpu_utilization_sampling()
         results = self.model(image)
+        detection_end = time.time()
+        self._stop_gpu_utilization_sampling()
         
         logo_count = Counter()
         
+        peak_mb = int(torch.cuda.max_memory_allocated() / (1024**2)) if self.device == 'cuda' else None
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
             "Processing image",
             frame=1,
             total_frames=1,
-            progress_percentage=100
+            progress_percentage=100,
+            gpu_peak_mb=peak_mb
         )
         
         # Count logo detections
@@ -267,9 +385,40 @@ class InferenceManager:
         
         aggregated_stats = dict(aggregated_stats)
         
-        # Save statistics
+        # Save statistics (keep legacy format for images), plus write processing meta alongside
+        try:
+            processing_info = {
+                "device": self.device,
+                "device_name": self.device_name,
+                "gpu_total_vram_mb": int(self.gpu_total_mem_bytes / (1024**2)) if self.gpu_total_mem_bytes else None,
+                "gpu_peak_allocated_mb": int(torch.cuda.max_memory_allocated() / (1024**2)) if self.device == 'cuda' else None,
+                "gpu_peak_utilization_pct": int(self.gpu_peak_util_pct) if self.gpu_peak_util_pct is not None else None,
+                "start_time": int(start_time),
+                "end_time": int(time.time()),
+                "duration_sec": round(max(0.0, time.time() - start_time), 2),
+                "detection_duration_sec": round(max(0.0, detection_end - detection_start), 2)
+            }
+        except Exception:
+            processing_info = {
+                "device": self.device,
+                "device_name": self.device_name,
+                "gpu_total_vram_mb": int(self.gpu_total_mem_bytes / (1024**2)) if self.gpu_total_mem_bytes else None,
+                "gpu_peak_allocated_mb": None,
+                "gpu_peak_utilization_pct": int(self.gpu_peak_util_pct) if self.gpu_peak_util_pct is not None else None,
+                "start_time": int(start_time),
+                "end_time": int(time.time()),
+                "duration_sec": round(max(0.0, time.time() - start_time), 2),
+                "detection_duration_sec": round(max(0.0, detection_end - detection_start), 2)
+            }
+
+        # For backward compatibility, write aggregated_stats as before, and also a sidecar meta file
         with open(stats_file, "w") as f:
             json.dump(aggregated_stats, f, indent=4)
+        try:
+            with open(os.path.join(result_dir, 'processing_meta.json'), 'w') as f:
+                json.dump({"processing_info": processing_info}, f, indent=4)
+        except Exception:
+            pass
         
         # Update progress
         self.progress.update_progress(
@@ -279,6 +428,12 @@ class InferenceManager:
     
     def _process_video(self, video_path, file_hash):
         """Process a video for logo detection"""
+        start_time = time.time()
+        if self.device == 'cuda':
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except Exception:
+                pass
         # Create a dedicated directory for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
@@ -291,13 +446,22 @@ class InferenceManager:
         
         # Open the video
         cap = cv2.VideoCapture(video_path)
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
         fps = cap.get(cv2.CAP_PROP_FPS)
         width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width_cap, height_cap))
-        raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width_cap, height_cap))
         
+        # Conditionally create video writers
+        if self.generate_videos:
+            # Use mp4v codec which is more reliable with OpenCV
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width_cap, height_cap))
+            raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width_cap, height_cap))
+            if not out.isOpened() or not raw_out.isOpened():
+                raise RuntimeError("Failed to create video writers")
+        else:
+            out = None
+            raw_out = None
+
         # Get video properties
         frame_time = 1 / fps if fps > 0 else 0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -341,6 +505,8 @@ class InferenceManager:
         detections_writer = open(detections_jsonl_path, 'w')
         
         # Process each frame
+        detection_start = time.time()
+        self._start_gpu_utilization_sampling()
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -513,25 +679,69 @@ class InferenceManager:
             except Exception:
                 pass
 
-            # Write raw frame then annotated frame
-            raw_out.write(frame)
-            annotated_frame = self._annotate_frame(frame, results)
-            out.write(annotated_frame)
+            # Write raw frame then annotated frame (optional)
+            if raw_out is not None:
+                raw_out.write(frame)
+            if out is not None:
+                annotated_frame = self._annotate_frame(frame, results)
+                out.write(annotated_frame)
             
             # Update progress
             progress_percentage = (frame_count / total_frames) * 100 if total_frames > 0 else 0
+            peak_mb = int(torch.cuda.max_memory_allocated() / (1024**2)) if self.device == 'cuda' else None
             self.progress.update_progress(
                 ProgressStage.INFERENCE_PROGRESS,
                 f"Processing frame {frame_count}/{total_frames} ({round(progress_percentage)}%)",
                 frame=frame_count,
                 total_frames=total_frames,
-                progress_percentage=progress_percentage
+                progress_percentage=progress_percentage,
+                gpu_peak_mb=peak_mb
             )
         
         # Clean up
         cap.release()
-        out.release()
-        raw_out.release()
+        if out is not None:
+            out.release()
+        if raw_out is not None:
+            raw_out.release()
+        detection_end = time.time()
+        self._stop_gpu_utilization_sampling()
+        
+        # Re-encode videos to H.264 using FFmpeg for browser compatibility (optional)
+        if self.generate_videos and self.convert_h264:
+            self.progress.update_progress(
+                ProgressStage.POST_PROCESSING,
+                "Converting videos to H.264 format"
+            )
+            try:
+                # Convert output video to H.264
+                output_web_path = output_path.replace('.mp4', '_web.mp4')
+                ffmpeg_cmd_output = [
+                    'ffmpeg', '-y', '-i', output_path,
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    output_web_path
+                ]
+                result = subprocess.run(ffmpeg_cmd_output, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"FFmpeg error for output.mp4:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+                # Convert raw video to H.264
+                raw_web_path = raw_path.replace('.mp4', '_web.mp4')
+                ffmpeg_cmd_raw = [
+                    'ffmpeg', '-y', '-i', raw_path,
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    raw_web_path
+                ]
+                result = subprocess.run(ffmpeg_cmd_raw, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"FFmpeg error for raw.mp4:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+            except Exception as e:
+                print(f"Error during video re-encoding: {e}")
+        
         try:
             detections_writer.close()
         except Exception:
@@ -575,6 +785,23 @@ class InferenceManager:
                 }
 
         # Prepare final JSON output with metadata
+        # Add processing metadata
+        try:
+            peak_alloc = torch.cuda.max_memory_allocated() if self.device == 'cuda' else None
+        except Exception:
+            peak_alloc = None
+        processing_info = {
+            "device": self.device,
+            "device_name": self.device_name,
+            "gpu_total_vram_mb": int(self.gpu_total_mem_bytes / (1024**2)) if self.gpu_total_mem_bytes else None,
+            "gpu_peak_allocated_mb": int(peak_alloc / (1024**2)) if peak_alloc else None,
+            "gpu_peak_utilization_pct": int(self.gpu_peak_util_pct) if self.gpu_peak_util_pct is not None else None,
+            "start_time": int(start_time),
+            "end_time": int(time.time()),
+            "duration_sec": round(max(0.0, time.time() - start_time), 2),
+            "detection_duration_sec": round(max(0.0, detection_end - detection_start), 2)
+        }
+
         output_data = {
             "video_metadata": {
                 "duration": round(total_video_time, 2),
@@ -583,7 +810,8 @@ class InferenceManager:
                 "width": width_cap,
                 "height": height_cap
             },
-            "logo_stats": final_stats
+            "logo_stats": final_stats,
+            "processing_info": processing_info
         }
 
         # Save aggregated statistics
@@ -662,6 +890,12 @@ class InferenceManager:
     
     def _process_video_stream(self, url, file_hash):
         """Process a video stream (e.g., m3u8) by piping frames via ffmpeg."""
+        start_time = time.time()
+        if self.device == 'cuda':
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except Exception:
+                pass
         # Resolve to highest-quality variant if this is a master HLS playlist
         url = self._resolve_hls_highest_variant(url)
         # Create a dedicated directory for the results
@@ -715,9 +949,18 @@ class InferenceManager:
         ]
         pipe = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**8)
 
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-        raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width, height))
+        # Conditionally create video writers
+        if self.generate_videos:
+            # Use mp4v codec which is more reliable with OpenCV
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width, height))
+            
+            if not out.isOpened() or not raw_out.isOpened():
+                raise RuntimeError("Failed to create video writers")
+        else:
+            out = None
+            raw_out = None
 
         frame_time = 1 / fps
         frame_count = 0
@@ -743,12 +986,14 @@ class InferenceManager:
         # Per-frame prominence series: 0-100 per frame (0 when absent)
         prominence_per_frame = defaultdict(list)
 
+        peak_mb = int(torch.cuda.max_memory_allocated() / (1024**2)) if self.device == 'cuda' else None
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
             "Processing stream",
             frame=frame_count,
             total_frames=estimated_total_frames,
-            progress_percentage=0
+            progress_percentage=0,
+            gpu_peak_mb=peak_mb
         )
 
         # Prepare per-frame detections JSONL
@@ -758,6 +1003,8 @@ class InferenceManager:
         except Exception:
             detections_writer = None
 
+        detection_start = time.time()
+        self._start_gpu_utilization_sampling()
         while True:
             raw = pipe.stdout.read(width * height * 3)
             if not raw:
@@ -895,8 +1142,9 @@ class InferenceManager:
                         prominence_per_frame[lg].append(0.0)
                     prominence_per_frame[lg].append(0.0)
 
-            # Write raw frame and annotated frame
-            raw_out.write(frame)
+            # Write raw frame and annotated frame (optional)
+            if raw_out is not None:
+                raw_out.write(frame)
             # Write per-frame detections JSONL
             if detections_writer is not None:
                 try:
@@ -908,8 +1156,9 @@ class InferenceManager:
                 except Exception:
                     pass
 
-            annotated_frame = self._annotate_frame(frame, results)
-            out.write(annotated_frame)
+            if out is not None:
+                annotated_frame = self._annotate_frame(frame, results)
+                out.write(annotated_frame)
 
             # Update progress percentage if we know estimated_total_frames
             progress_pct = (frame_count / estimated_total_frames * 100) if estimated_total_frames else 0
@@ -919,18 +1168,59 @@ class InferenceManager:
             elif progress_pct > 100:
                 progress_pct = 100
             msg_suffix = f" (~{round(progress_pct)}%)" if estimated_total_frames else ""
+            peak_mb = int(torch.cuda.max_memory_allocated() / (1024**2)) if self.device == 'cuda' else None
             self.progress.update_progress(
                 ProgressStage.INFERENCE_PROGRESS,
                 f"Processing frame {frame_count}{msg_suffix}",
                 frame=frame_count,
                 total_frames=estimated_total_frames,
-                progress_percentage=progress_pct
+                progress_percentage=progress_pct,
+                gpu_peak_mb=peak_mb
             )
 
         pipe.stdout.close()
         pipe.wait()
-        out.release()
-        raw_out.release()
+        if out is not None:
+            out.release()
+        if raw_out is not None:
+            raw_out.release()
+        detection_end = time.time()
+        self._stop_gpu_utilization_sampling()
+        
+        if self.generate_videos and self.convert_h264:
+            self.progress.update_progress(
+                ProgressStage.POST_PROCESSING,
+                "Re-encoding video for web playback"
+            )
+            try:
+                # Re-encode output video for web
+                output_web_path = output_path.replace('.mp4', '_web.mp4')
+                ffmpeg_cmd_output = [
+                    'ffmpeg', '-y', '-i', output_path,
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    output_web_path
+                ]
+                result = subprocess.run(ffmpeg_cmd_output, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"FFmpeg error for output.mp4:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+                # Re-encode raw video for web
+                raw_web_path = raw_path.replace('.mp4', '_web.mp4')
+                ffmpeg_cmd_raw = [
+                    'ffmpeg', '-y', '-i', raw_path,
+                    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+                    '-c:a', 'aac', '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    raw_web_path
+                ]
+                result = subprocess.run(ffmpeg_cmd_raw, check=False, capture_output=True, text=True)
+                if result.returncode != 0:
+                    print(f"FFmpeg error for raw.mp4:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+            except Exception as e:
+                print(f"Error during video re-encoding: {e}")
+
         try:
             if detections_writer is not None:
                 detections_writer.close()
@@ -981,6 +1271,22 @@ class InferenceManager:
                     "share_of_voice_solo_percentage": round(solo_percentage, 2)
                 }
 
+        try:
+            peak_alloc = torch.cuda.max_memory_allocated() if self.device == 'cuda' else None
+        except Exception:
+            peak_alloc = None
+        processing_info = {
+            "device": self.device,
+            "device_name": self.device_name,
+            "gpu_total_vram_mb": int(self.gpu_total_mem_bytes / (1024**2)) if self.gpu_total_mem_bytes else None,
+            "gpu_peak_allocated_mb": int(peak_alloc / (1024**2)) if peak_alloc else None,
+            "gpu_peak_utilization_pct": int(self.gpu_peak_util_pct) if self.gpu_peak_util_pct is not None else None,
+            "start_time": int(start_time),
+            "end_time": int(time.time()),
+            "duration_sec": round(max(0.0, time.time() - start_time), 2),
+            "detection_duration_sec": round(max(0.0, detection_end - detection_start), 2)
+        }
+
         output_data = {
             "video_metadata": {
                 "duration": round(total_video_time, 2),
@@ -989,7 +1295,8 @@ class InferenceManager:
                 "width": width,
                 "height": height
             },
-            "logo_stats": final_stats
+            "logo_stats": final_stats,
+            "processing_info": processing_info
         }
 
         with open(stats_file, "w") as f:
@@ -1089,7 +1396,30 @@ class InferenceManager:
             return best_uri or url
         except Exception:
             return url
-    
+
+    def _reencode_for_web(self, input_path):
+        """Re-encode a video to a web-safe H.264 format."""
+        if not os.path.exists(input_path):
+            return
+
+        output_path = input_path.replace('.mp4', '_web.mp4')
+        
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-i', input_path,
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', '+faststart',
+            output_path
+        ]
+        
+        try:
+            # Using capture_output to hide ffmpeg stdout/stderr from main logs unless error occurs
+            result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            # Log detailed ffmpeg error if conversion fails
+            print(f"FFmpeg error while converting {input_path}:\n{e.stderr}")
+            raise e
+
     def _aggregate_stats(self, logo_stats):
         """Aggregate logo statistics"""
         aggregated = defaultdict(lambda: {"frames": 0, "time": 0.0, "detections": 0, "percentage": 0.0})
