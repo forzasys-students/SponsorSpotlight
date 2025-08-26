@@ -9,6 +9,7 @@ import hashlib
 from backend.core.inference_manager import InferenceManager
 from backend.utils.progress_manager import ProgressManager
 from backend.utils.agent_task_manager import AgentTaskManager
+from backend.utils.file_cache import FileCache
 
 # Import route modules
 from backend.api.routes.main_routes import register_main_routes
@@ -22,6 +23,8 @@ TEMPLATE_DIR = os.path.join(BASE_DIR, 'frontend', 'templates')
 STATIC_DIR = os.path.join(BASE_DIR, 'frontend', 'static')
 UPLOAD_DIR = os.path.join(STATIC_DIR, 'uploads')
 RESULTS_DIR = os.path.join(STATIC_DIR, 'results')
+CACHE_DIR = os.path.join(BASE_DIR, 'data', 'cache')
+
 
 # Initialize Flask app
 app = Flask(__name__, 
@@ -38,6 +41,8 @@ app.config['MAX_CONTENT_LENGTH'] = 6 * 1024 * 1024 * 1024  # 6GB max upload size
 # Create upload and results directories if they don't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+
 
 # Print paths for debugging
 print(f"Base directory: {BASE_DIR}")
@@ -50,6 +55,8 @@ print(f"Results directory: {RESULTS_DIR}")
 progress_manager = ProgressManager()
 inference_manager = InferenceManager(progress_manager)
 agent_task_manager = AgentTaskManager()
+file_cache = FileCache(os.path.join(CACHE_DIR, 'file_metadata_cache.json'))
+
 
 # Utility functions
 def allowed_file(filename):
@@ -67,8 +74,8 @@ def get_url_hash(url: str) -> str:
     return hashlib.md5(url.strip().encode('utf-8')).hexdigest()
 
 # Register all route modules
-register_main_routes(app, inference_manager, allowed_file, get_file_hash, get_url_hash)
-register_file_routes(app, allowed_file, get_file_hash)
+register_main_routes(app, inference_manager, allowed_file, file_cache.get_hash, get_url_hash)
+register_file_routes(app, allowed_file, file_cache)
 register_api_routes(app)
 register_agent_routes(app, agent_task_manager)
 

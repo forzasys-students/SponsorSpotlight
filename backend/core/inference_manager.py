@@ -11,6 +11,7 @@ import math
 from urllib.parse import urljoin
 from collections import defaultdict, Counter
 import time
+from queue import Queue
 from ultralytics import YOLO
 
 from backend.utils.progress_manager import ProgressManager, ProgressStage
@@ -339,6 +340,47 @@ class InferenceManager:
             "Processing complete"
         )
     
+    def _inference_worker(self, inference_queue, post_proc_queue):
+        """Worker thread that runs model inference on batches of frames."""
+        while True:
+            batch_data = inference_queue.get()
+            if batch_data is None:
+                post_proc_queue.put(None)
+                break
+            
+            frames, indices = batch_data
+            results = self._infer_batch(frames)
+            post_proc_queue.put((frames, indices, results))
+
+    def _post_processing_worker(self, post_proc_queue, stats_calculator, raw_out, out, total_frames):
+        """Worker thread that processes inference results."""
+        while True:
+            proc_data = post_proc_queue.get()
+            if proc_data is None:
+                break
+
+            frames_buffer, indices_buffer, results_batch = proc_data
+            
+            for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
+                per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
+                stats_calculator.process_frame(frm_idx, frm, per_frame_results)
+                
+                if raw_out is not None:
+                    raw_out.write(frm)
+                if out is not None:
+                    annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                    out.write(annotated_frame)
+                
+                progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
+                self.progress.update_progress(
+                    ProgressStage.INFERENCE_PROGRESS,
+                    f"Processing frame {frm_idx}/{total_frames} ({round(progress_percentage)}%)",
+                    frame=frm_idx,
+                    total_frames=total_frames,
+                    progress_percentage=progress_percentage,
+                    gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
+                )
+
     def _process_video(self, video_path, file_hash):
         """Process a video for logo detection"""
         start_time = time.time()
@@ -387,6 +429,22 @@ class InferenceManager:
         detection_start = time.time()
         self.gpu_manager.start_sampling()
 
+        # --- Start of Parallel Processing Setup ---
+        
+        # Queues to buffer data between threads
+        # maxsize helps prevent the video reader from outpacing the processors and using too much RAM
+        inference_queue = Queue(maxsize=self.batch_size * 2)
+        post_proc_queue = Queue(maxsize=self.batch_size * 2)
+
+        # Start worker threads
+        inference_thread = threading.Thread(target=self._inference_worker, args=(inference_queue, post_proc_queue))
+        post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, raw_out, out, total_frames))
+        
+        inference_thread.start()
+        post_proc_thread.start()
+        
+        # --- Main thread's job: Read frames and feed the pipeline ---
+        
         frame_count = 0
         frames_buffer = []
         indices_buffer = []
@@ -394,26 +452,6 @@ class InferenceManager:
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                # Flush remaining frames in buffer
-                if len(frames_buffer) > 0:
-                    results_batch = self._infer_batch(frames_buffer)
-                    for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
-                        per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
-                        per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
-                        if raw_out is not None:
-                            raw_out.write(frm)
-                        if out is not None:
-                            annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                            out.write(annotated_frame)
-                        progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
-                        self.progress.update_progress(
-                            ProgressStage.INFERENCE_PROGRESS,
-                            f"Processing frame {frm_idx}/{total_frames} ({round(progress_percentage)}%)",
-                            frame=frm_idx,
-                            total_frames=total_frames,
-                            progress_percentage=progress_percentage,
-                            gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                        )
                 break
 
             frame_count += 1
@@ -421,27 +459,23 @@ class InferenceManager:
             indices_buffer.append(frame_count)
 
             if len(frames_buffer) >= self.batch_size:
-                results_batch = self._infer_batch(frames_buffer)
-                for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
-                    per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
-                    per_frame_detections = stats_calculator.process_frame(frm_idx, frm, per_frame_results)
-                    if raw_out is not None:
-                        raw_out.write(frm)
-                    if out is not None:
-                        annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                        out.write(annotated_frame)
-                    progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
-                    self.progress.update_progress(
-                        ProgressStage.INFERENCE_PROGRESS,
-                        f"Processing frame {frm_idx}/{total_frames} ({round(progress_percentage)}%)",
-                        frame=frm_idx,
-                        total_frames=total_frames,
-                        progress_percentage=progress_percentage,
-                        gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                    )
+                inference_queue.put((list(frames_buffer), list(indices_buffer)))
                 frames_buffer.clear()
                 indices_buffer.clear()
         
+        # Put the last partial batch on the queue
+        if frames_buffer:
+            inference_queue.put((frames_buffer, indices_buffer))
+        
+        # Signal end of video to workers
+        inference_queue.put(None)
+        
+        # Wait for threads to finish
+        inference_thread.join()
+        post_proc_thread.join()
+
+        # --- End of Parallel Processing ---
+
         # Clean up
         cap.release()
         if out is not None: out.release()

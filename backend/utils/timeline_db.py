@@ -190,23 +190,26 @@ class TimelineDatabase:
         return detections
     
     def get_timeline_stats(self) -> Dict[str, List[int]]:
-        """Get frame lists for each logo (compatible with existing timeline_stats.json format)"""
+        """
+        Get frame lists for each logo, compatible with older SQLite versions.
+        This function is intentionally compatible with older SQLite versions that
+        do not support ORDER BY within GROUP_CONCAT.
+        """
         query = """
-            SELECT l.name, GROUP_CONCAT(t.frame ORDER BY t.frame) as frames
+            SELECT l.name, t.frame
             FROM timeseries t
             JOIN logos l ON t.logo_id = l.id
             WHERE t.coverage > 0 OR t.prominence > 0
-            GROUP BY l.name
+            ORDER BY l.name, t.frame
         """
         cursor = self.conn.execute(query)
         results = cursor.fetchall()
         
         timeline_stats = {}
-        for logo_name, frames_str in results:
-            if frames_str:
-                timeline_stats[logo_name] = [int(f) for f in frames_str.split(',')]
-            else:
+        for logo_name, frame in results:
+            if logo_name not in timeline_stats:
                 timeline_stats[logo_name] = []
+            timeline_stats[logo_name].append(frame)
         
         return timeline_stats
     

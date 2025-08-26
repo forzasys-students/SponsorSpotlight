@@ -6,7 +6,7 @@ import os
 import json
 
 
-def register_file_routes(app, allowed_file, get_file_hash):
+def register_file_routes(app, allowed_file, file_cache):
     """Register file management routes"""
     
     @app.route('/list_existing_files')
@@ -19,31 +19,32 @@ def register_file_routes(app, allowed_file, get_file_hash):
         for filename in os.listdir(app.config['UPLOAD_FOLDER']):
             if allowed_file(filename):
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                if os.path.isfile(file_path):
-                    file_size = os.path.getsize(file_path)
-                    file_size_mb = round(file_size / (1024 * 1024), 2)
-                    
-                    # Generate file hash to check if already processed
-                    file_hash = get_file_hash(file_path)
-                    file_extension = filename.rsplit('.', 1)[1].lower()
-                    file_type = 'video' if file_extension in ['mp4', 'avi', 'mov', 'webm'] else 'image'
-                    
-                    # Check if results already exist (only need stats.json)
-                    result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
-                    stats_path = os.path.join(result_dir, 'stats.json')
-                    is_processed = os.path.exists(stats_path)
-                    
-                    if is_processed:
-                        processed_hashes.add(file_hash)
-                    
-                    files.append({
-                        'filename': filename,
-                        'size_mb': file_size_mb,
-                        'type': file_type,
-                        'hash': file_hash,
-                        'is_processed': is_processed,
-                        'source': 'upload'
-                    })
+                
+                metadata = file_cache.get_file_metadata(file_path)
+                if not metadata:
+                    continue
+
+                file_hash = metadata['hash']
+                file_size_mb = round(metadata['size'] / (1024 * 1024), 2)
+                file_extension = filename.rsplit('.', 1)[1].lower()
+                file_type = 'video' if file_extension in ['mp4', 'avi', 'mov', 'webm'] else 'image'
+                
+                # Check if results already exist (only need stats.json)
+                result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
+                stats_path = os.path.join(result_dir, 'stats.json')
+                is_processed = os.path.exists(stats_path)
+                
+                if is_processed:
+                    processed_hashes.add(file_hash)
+                
+                files.append({
+                    'filename': filename,
+                    'size_mb': file_size_mb,
+                    'type': file_type,
+                    'hash': file_hash,
+                    'is_processed': is_processed,
+                    'source': 'upload'
+                })
         
         # Then, scan results directory for URL-based results that don't have upload files
         for result_hash in os.listdir(app.config['RESULTS_FOLDER']):
@@ -140,7 +141,8 @@ def register_file_routes(app, allowed_file, get_file_hash):
             for filename in os.listdir(app.config['UPLOAD_FOLDER']):
                 if allowed_file(filename):
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    if os.path.isfile(file_path) and get_file_hash(file_path) == file_hash:
+                    # Use the cache to get the hash
+                    if os.path.isfile(file_path) and file_cache.get_hash(file_path) == file_hash:
                         file_extension = filename.rsplit('.', 1)[1].lower()
                         file_type = 'video' if file_extension in ['mp4', 'avi', 'mov', 'webm'] else 'image'
                         file_info = {
