@@ -4,11 +4,11 @@ import json
 import cv2
 import math
 import numpy as np
+from backend.utils.timeline_db import TimelineDatabase
 
 # Reuse overlay utilities from the brand-specific clip tool
 from backend.agent.tools.create_brand_clip_tool import (
     _normalize_brand,
-    _load_detections_map,
     _draw_brand_overlays,
 )
 
@@ -63,10 +63,10 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
     Create a highlight montage for a brand by stitching together multiple
     high-coverage subclips from the RAW video, annotated ONLY for that brand.
 
-    - Uses coverage_per_frame.json to score frames
+    - Uses timeline.db to score frames by coverage
     - Selects top non-overlapping windows of length `segment_seconds`
       until reaching ~`desired_total_duration`
-    - Annotates only that brand via saved frame_detections.jsonl
+    - Annotates only that brand via timeline.db
 
     Returns the output clip path or an error message.
     """
@@ -75,90 +75,83 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
         file_info.get('raw_video_path')
         or (file_info.get('video_path') or '').replace('output.mp4', 'raw.mp4')
     )
-    coverage_path = file_info.get('coverage_per_frame_path')
-    detections_path = file_info.get('frame_detections_path')
+    db_path = file_info.get('timeline_db_path')
     video_meta = file_info.get('video_metadata') or {}
     fps = float(video_meta.get('fps') or 25.0)
 
     if not raw_video or not os.path.exists(raw_video):
         return "Error: raw video not found."
-    if not coverage_path or not os.path.exists(coverage_path):
-        return "Error: coverage_per_frame.json not found."
-    if not detections_path or not os.path.exists(detections_path):
-        return "Error: frame detections file not found."
+    if not db_path or not os.path.exists(db_path):
+        return "Error: timeline database not found."
 
+    out_path = "" # Define here for use in finally block
     try:
-        with open(coverage_path, 'r') as f:
-            coverage_data = json.load(f)
-        per_logo = coverage_data.get('per_logo') or {}
-    except Exception as e:
-        return f"Error reading coverage data: {e}"
-
-    # Case-insensitive match for brand key
-    brand_key = None
-    for k in per_logo.keys():
-        if _normalize_brand(k) == brand_norm:
-            brand_key = k
-            break
-    if brand_key is None:
-        return f"Error: No coverage series found for brand '{brand_name}'."
-
-    series = per_logo.get(brand_key) or []
-    if not series:
-        return f"Error: Empty coverage series for brand '{brand_name}'."
-
-    windows = _find_best_windows(series, fps, desired_total_duration, segment_seconds)
-    if not windows:
-        return f"Error: Could not find highlight windows for '{brand_name}'."
-
-    # Prepare IO
-    cap = cv2.VideoCapture(raw_video)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    codec = cv2.VideoWriter_fourcc(*'avc1')
-    out_dir = os.path.dirname(file_info.get('video_path') or raw_video)
-    brand_sanitized = ''.join(c for c in brand_name if c.isalnum() or c in ('-', '_')) or 'brand'
-    out_path = os.path.join(out_dir, f"highlight_{brand_sanitized}_{int(desired_total_duration)}s.mp4")
-    writer = cv2.VideoWriter(out_path, codec, fps, (width, height))
-
-    # Load detections
-    frame_map = _load_detections_map(detections_path)
-
-    # Write windows sequentially; insert short black spacer between segments for visible transition
-    spacer_frames = int(max(2, fps * 0.12))  # ~120ms spacer
-    black = np.zeros((height, width, 3), dtype=np.uint8)
-
-    try:
-        prev_end_frame = None
-        for idx, (st, et) in enumerate(windows):
-            start_frame = max(0, int(round(st * fps)))
-            end_frame = max(start_frame + 1, int(round(et * fps)))
-
-            # If this segment overlaps/abuts the previous, treat as contiguous: no spacer and avoid duplicating frames
-            if prev_end_frame is not None:
-                if start_frame <= prev_end_frame:
-                    start_frame = prev_end_frame  # merge overlap/adjacency
-                else:
-                    # Non-contiguous: insert a short spacer before this segment
-                    for _ in range(spacer_frames):
-                        writer.write(black)
-
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-            current = start_frame
-            while current < end_frame:
-                ret, frame = cap.read()
-                if not ret:
+        with TimelineDatabase(db_path) as db:
+            # Case-insensitive match for brand key
+            brand_key = None
+            logos_in_db = db.get_all_logos()
+            for k in logos_in_db:
+                if _normalize_brand(k) == brand_norm:
+                    brand_key = k
                     break
-                frame_num_jsonl = current + 1
-                dets = frame_map.get(frame_num_jsonl, [])
-                annotated = _draw_brand_overlays(frame, dets, brand_norm)
-                writer.write(annotated)
-                current += 1
+            if brand_key is None:
+                return f"Error: No coverage series found for brand '{brand_name}'."
 
-            prev_end_frame = end_frame
+            series = db.get_coverage_series(brand_key)
+            if not series:
+                return f"Error: Empty coverage series for brand '{brand_name}'."
+
+            windows = _find_best_windows(series, fps, desired_total_duration, segment_seconds)
+            if not windows:
+                return f"Error: Could not find highlight windows for '{brand_name}'."
+
+            # Prepare IO
+            cap = cv2.VideoCapture(raw_video)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            codec = cv2.VideoWriter_fourcc(*'avc1')
+            out_dir = os.path.dirname(file_info.get('video_path') or raw_video)
+            brand_sanitized = ''.join(c for c in brand_name if c.isalnum() or c in ('-', '_')) or 'brand'
+            out_path = os.path.join(out_dir, f"highlight_{brand_sanitized}_{int(desired_total_duration)}s.mp4")
+            writer = cv2.VideoWriter(out_path, codec, fps, (width, height))
+
+            # Write windows sequentially; insert short black spacer between segments
+            spacer_frames = int(max(2, fps * 0.12))
+            black = np.zeros((height, width, 3), dtype=np.uint8)
+
+            prev_end_frame = None
+            for idx, (st, et) in enumerate(windows):
+                start_frame = max(0, int(round(st * fps)))
+                end_frame = max(start_frame + 1, int(round(et * fps)))
+
+                if prev_end_frame is not None:
+                    if start_frame <= prev_end_frame:
+                        start_frame = prev_end_frame
+                    else:
+                        for _ in range(spacer_frames):
+                            writer.write(black)
+
+                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                current = start_frame
+                while current < end_frame:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    # Database frames are 1-based
+                    frame_num_for_db = current + 1
+                    dets = db.get_frame_detections(frame_num_for_db)
+                    annotated = _draw_brand_overlays(frame, dets, brand_norm)
+                    writer.write(annotated)
+                    current += 1
+
+                prev_end_frame = end_frame
+    except Exception as e:
+        return f"An unexpected error occurred during montage creation: {e}"
     finally:
-        cap.release()
-        writer.release()
+        if 'cap' in locals() and cap.isOpened():
+            cap.release()
+        if 'writer' in locals() and writer.isOpened():
+            writer.release()
 
     if os.path.exists(out_path):
         return out_path

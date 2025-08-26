@@ -2,9 +2,10 @@ import cv2
 import numpy as np
 import math
 from collections import defaultdict, Counter
+from backend.utils.timeline_db import TimelineDatabase
 
 class StatisticsCalculator:
-    def __init__(self, class_names, logo_groups, total_frames, fps):
+    def __init__(self, class_names, logo_groups, total_frames, fps, db_path=None):
         self.class_names = class_names
         self.logo_groups = logo_groups
         self.total_frames = total_frames
@@ -21,6 +22,17 @@ class StatisticsCalculator:
         self.frame_by_frame_detections = defaultdict(list)
         self.coverage_per_frame = defaultdict(list)
         self.prominence_per_frame = defaultdict(list)
+        
+        # Database support (optional)
+        self.db_path = db_path
+        self.db = None
+        if db_path:
+            try:
+                self.db = TimelineDatabase(db_path)
+                print(f"✅ Timeline database initialized: {db_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to initialize timeline database: {e}")
+                self.db = None
 
     def process_frame(self, frame_count, frame, results):
         logos_in_frame = Counter()
@@ -141,6 +153,38 @@ class StatisticsCalculator:
                 self._backfill_series(self.prominence_per_frame[lg], frame_count)
                 self.prominence_per_frame[lg].append(0.0)
         
+        # Write to database if available
+        if self.db:
+            try:
+                frame_area = float(frame.shape[0] * frame.shape[1]) if frame is not None else 0.0
+                
+                # Write data for all logos present in this frame
+                for main_logo in main_logos_in_frame:
+                    coverage_ratio = 0.0
+                    if frame_area > 0:
+                        logo_area = logo_area_pixels_in_frame.get(main_logo, 0.0)
+                        coverage_ratio = min(1.0, logo_area / frame_area)
+                    
+                    prominence_score = per_brand_prominence_frame.get(main_logo, 0.0)
+                    
+                    # Get detections for this logo
+                    logo_detections = [d for d in per_frame_detections if d.get('class') == main_logo]
+                    
+                    self.db.add_frame_data(
+                        frame=frame_count,
+                        logo_name=main_logo,
+                        coverage=coverage_ratio * 100.0,  # Store as percentage
+                        prominence=prominence_score * 100.0,  # Store as percentage
+                        detections=logo_detections
+                    )
+                
+                # Commit every 100 frames for performance
+                if frame_count % 100 == 0:
+                    self.db.commit()
+                    
+            except Exception as e:
+                print(f"⚠️ Failed to write frame {frame_count} to database: {e}")
+        
         return per_frame_detections
 
     def _backfill_series(self, series, frame_count):
@@ -184,5 +228,13 @@ class StatisticsCalculator:
         for lg, series in self.prominence_per_frame.items():
             while len(series) < self.total_frames:
                 series.append(0.0)
+
+        # Final database commit and cleanup
+        if self.db:
+            try:
+                self.db.commit()
+                print(f"✅ Timeline database finalized with {self.db.get_max_frame()} frames")
+            except Exception as e:
+                print(f"⚠️ Failed to finalize database: {e}")
 
         return final_stats, self.frame_by_frame_detections, self.coverage_per_frame, self.prominence_per_frame
