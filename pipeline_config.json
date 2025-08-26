@@ -1,7 +1,7 @@
 {
-  "generate_videos": true,
-  "convert_h264": true,
-  "batch_size": 1,
+  "generate_videos": false,
+  "convert_h264": false,
+  "batch_size": 32,
   "precision": "fp16"
 }
 
