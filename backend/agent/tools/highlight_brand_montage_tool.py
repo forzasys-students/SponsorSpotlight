@@ -109,7 +109,7 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
             cap = cv2.VideoCapture(raw_video)
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            codec = cv2.VideoWriter_fourcc(*'avc1')
+            codec = cv2.VideoWriter_fourcc(*'mp4v')
             out_dir = os.path.dirname(file_info.get('video_path') or raw_video)
             brand_sanitized = ''.join(c for c in brand_name if c.isalnum() or c in ('-', '_')) or 'brand'
             out_path = os.path.join(out_dir, f"highlight_{brand_sanitized}_{int(desired_total_duration)}s.mp4")
@@ -154,6 +154,27 @@ def create_brand_highlight_montage(brand_name: str, file_info: dict, desired_tot
             writer.release()
 
     if os.path.exists(out_path):
+        # Convert to H.264 for browser compatibility (same as inference manager)
+        try:
+            web_output_path = out_path.replace('.mp4', '_web.mp4')
+            ffmpeg_cmd = [
+                'ffmpeg', '-y', '-i', out_path,
+                '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+                '-c:a', 'aac', '-b:a', '128k',
+                '-movflags', '+faststart',
+                web_output_path
+            ]
+            import subprocess
+            result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
+            if result.returncode == 0 and os.path.exists(web_output_path):
+                # Return the web-compatible version
+                return web_output_path
+            else:
+                print(f"FFmpeg conversion failed, returning original: {result.stderr}")
+        except Exception as e:
+            print(f"FFmpeg conversion error: {e}")
+        
+        # Return the original if conversion fails
         return out_path
     return "Error: failed to create highlight montage."
 

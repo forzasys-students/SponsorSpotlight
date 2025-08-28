@@ -111,9 +111,13 @@ def create_brand_specific_clip(brand_name: str, start_time: float, end_time: flo
 		file_info.get('raw_video_path')
 		or (file_info.get('video_path') or '').replace('output.mp4', 'raw.mp4')
 	)
+	
+
 	db_path = file_info.get('timeline_db_path')
 	video_meta = file_info.get('video_metadata') or {}
 	fps = float(video_meta.get('fps') or 25.0)
+	
+
 
 	if not raw_video or not os.path.exists(raw_video):
 		return "Error: raw video not found."
@@ -128,7 +132,9 @@ def create_brand_specific_clip(brand_name: str, start_time: float, end_time: flo
 	cap = cv2.VideoCapture(raw_video)
 	width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 	height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-	codec = cv2.VideoWriter_fourcc(*'avc1')
+	
+	# Use the same codec as the inference manager for browser compatibility
+	codec = cv2.VideoWriter_fourcc(*'mp4v')
 
 	# Frame range (OpenCV frames start at 0)
 	start_frame = max(0, int(round(start_time * fps)))
@@ -139,9 +145,14 @@ def create_brand_specific_clip(brand_name: str, start_time: float, end_time: flo
 	result_dir = os.path.dirname(file_info.get('video_path') or raw_video)
 	brand_sanitized = ''.join(c for c in brand_name if c.isalnum() or c in ('-', '_')) or 'brand'
 	output_path = os.path.join(result_dir, f"clip_{brand_sanitized}_{start_time}_{end_time}.mp4")
+	
+	# Create the video writer
 	out = cv2.VideoWriter(output_path, codec, fps, (width, height))
+	if not out.isOpened():
+		return f"Error: Failed to create video writer with codec. Output path: {output_path}"
 
 	current_frame_idx = start_frame
+	frames_processed = 0
 	try:
 		with TimelineDatabase(db_path) as db:
 			while current_frame_idx < end_frame:
@@ -153,12 +164,36 @@ def create_brand_specific_clip(brand_name: str, start_time: float, end_time: flo
 				dets = db.get_frame_detections(frame_num_for_db)
 				annotated = _draw_brand_overlays(frame, dets, brand_norm)
 				out.write(annotated)
+				frames_processed += 1
 				current_frame_idx += 1
+		
+
 	finally:
 		cap.release()
 		out.release()
 
 	if os.path.exists(output_path):
+		# Convert to H.264 for browser compatibility (same as inference manager)
+		try:
+			web_output_path = output_path.replace('.mp4', '_web.mp4')
+			ffmpeg_cmd = [
+				'ffmpeg', '-y', '-i', output_path,
+				'-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+				'-c:a', 'aac', '-b:a', '128k',
+				'-movflags', '+faststart',
+				web_output_path
+			]
+			import subprocess
+			result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
+			if result.returncode == 0 and os.path.exists(web_output_path):
+				# Return the web-compatible version
+				return web_output_path
+			else:
+				print(f"FFmpeg conversion failed, returning original: {result.stderr}")
+		except Exception as e:
+			print(f"FFmpeg conversion error: {e}")
+		
+		# Return the original if conversion fails
 		return output_path
 	return "Error: failed to create brand-specific clip."
 

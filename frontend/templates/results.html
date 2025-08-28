@@ -50,7 +50,15 @@
                     <div class="card-body p-0">
                         {% if file_type == 'image' %}
                             <div class="image-result-container">
-                                <img src="{{ url_for('static', filename=output_path) }}" class="img-fluid rounded" alt="Processed image with logo detections">
+                                {% if output_path %}
+                                    <img src="{{ url_for('static', filename=output_path) }}" class="img-fluid rounded" alt="Processed image with logo detections">
+                                {% else %}
+                                    <div class="alert alert-warning text-center">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        Image preview not available. The image file may not have been generated correctly.
+                                        However, all statistics and detection data are still available.
+                                    </div>
+                                {% endif %}
                             </div>
                         {% else %}
                         <ul class="nav nav-tabs px-3 pt-3" role="tablist">

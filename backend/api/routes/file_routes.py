@@ -101,27 +101,80 @@ def register_file_routes(app, allowed_file, file_cache):
     def show_results(file_hash):
         """Show the results page for a processed file, even if session is missing."""
         result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
-        video_out = os.path.join(result_dir, 'output.mp4')
-        image_out = os.path.join(result_dir, 'output.jpg')
         stats_path = os.path.join(result_dir, 'stats.json')
+        
         if not os.path.exists(stats_path):
             flash('Results not found. The file may still be processing or an error occurred.')
             return redirect(url_for('index'))
 
-        is_video = os.path.exists(video_out)
-        has_media = os.path.exists(video_out) or os.path.exists(image_out)
-        extension = 'mp4' if is_video else 'jpg'
-        output_rel_path = os.path.join('results', file_hash, f'output.{extension}') if has_media else None
+        # Check for various output file formats
+        video_out = os.path.join(result_dir, 'output.mp4')
+        video_out_web = os.path.join(result_dir, 'output_web.mp4')
+        raw_video = os.path.join(result_dir, 'raw_web.mp4')
+        image_out = os.path.join(result_dir, 'output.jpg')
         
+        # Determine if we have any media files
+        has_video = os.path.exists(video_out) or os.path.exists(video_out_web) or os.path.exists(raw_video)
+        has_image = os.path.exists(image_out)
+        has_media = has_video or has_image
+        
+        # Determine file type and output path
+        if has_video:
+            file_type = 'video'
+            # For videos, we need at least raw_video for the on-demand overlay
+            if os.path.exists(raw_video):
+                output_rel_path = os.path.join('results', file_hash, 'raw_web.mp4')
+            else:
+                output_rel_path = None
+        elif has_image:
+            file_type = 'image'
+            output_rel_path = os.path.join('results', file_hash, 'output.jpg') if has_media else None
+        else:
+            # Fallback: determine type from stats or assume video
+            try:
+                with open(stats_path, 'r') as f:
+                    stats_data = json.load(f)
+                    # Try to determine type from stats
+                    if 'video_metadata' in stats_data:
+                        file_type = 'video'
+                    else:
+                        file_type = 'image'
+            except:
+                file_type = 'video'  # Default assumption
+            output_rel_path = None
+        
+        # Try to get file info from session, but don't require it
         file_info = session.get('file_info') or {}
-        file_type = file_info.get('type') or ('video' if is_video else 'image')
-        original_name = file_info.get('original_name') or f'{file_hash}.{extension}'
+        
+        # If session doesn't have the right file or no session, try to determine from uploaded files
+        if not file_info or file_info.get('hash') != file_hash:
+            # Look for the original file in uploads to get file info
+            for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+                if allowed_file(filename):
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    # Use the cache to get the hash
+                    if os.path.isfile(file_path) and file_cache.get_hash(file_path) == file_hash:
+                        file_extension = filename.rsplit('.', 1)[1].lower()
+                        file_type = 'video' if file_extension in ['mp4', 'avi', 'mov', 'webm'] else 'image'
+                        file_info = {
+                            'type': file_type,
+                            'hash': file_hash,
+                            'original_name': filename
+                        }
+                        break
+            else:
+                # Use the file_type we determined above
+                file_info = {
+                    'type': file_type,
+                    'hash': file_hash,
+                    'original_name': f'{file_hash[:8]}.{file_type}'
+                }
 
         return render_template('results.html', 
                               file_type=file_type,
                               output_path=output_rel_path,
                               file_hash=file_hash,
-                              original_name=original_name)
+                              original_name=file_info.get('original_name', f'{file_hash[:8]}.{file_type}'))
 
     @app.route('/dashboard/<file_hash>')
     def show_dashboard(file_hash):
