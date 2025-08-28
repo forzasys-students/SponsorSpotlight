@@ -111,10 +111,11 @@ def register_file_routes(app, allowed_file, file_cache):
         video_out = os.path.join(result_dir, 'output.mp4')
         video_out_web = os.path.join(result_dir, 'output_web.mp4')
         raw_video = os.path.join(result_dir, 'raw_web.mp4')
+        raw_video_direct = os.path.join(result_dir, 'raw.mp4')
         image_out = os.path.join(result_dir, 'output.jpg')
         
         # Determine if we have any media files
-        has_video = os.path.exists(video_out) or os.path.exists(video_out_web) or os.path.exists(raw_video)
+        has_video = os.path.exists(video_out) or os.path.exists(video_out_web) or os.path.exists(raw_video) or os.path.exists(raw_video_direct)
         has_image = os.path.exists(image_out)
         has_media = has_video or has_image
         
@@ -124,6 +125,9 @@ def register_file_routes(app, allowed_file, file_cache):
             # For videos, we need at least raw_video for the on-demand overlay
             if os.path.exists(raw_video):
                 output_rel_path = os.path.join('results', file_hash, 'raw_web.mp4')
+            elif os.path.exists(video_out):
+                # Our new frame-extraction method produces output.mp4 directly
+                output_rel_path = os.path.join('results', file_hash, 'raw.mp4')
             else:
                 output_rel_path = None
         elif has_image:

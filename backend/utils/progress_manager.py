@@ -5,6 +5,7 @@ import time
 class ProgressStage(Enum):
     IDLE = 0
     UPLOAD_COMPLETE = 1
+    PRE_PROCESSING = 1.5  # Frame extraction, etc.
     MODEL_LOADING = 2
     MODEL_READY = 3
     INFERENCE_START = 4

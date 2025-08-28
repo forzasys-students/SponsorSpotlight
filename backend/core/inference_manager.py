@@ -8,6 +8,8 @@ import json
 import subprocess
 import requests
 import math
+import glob
+import shutil
 from urllib.parse import urljoin
 from collections import defaultdict, Counter
 import time
@@ -340,6 +342,58 @@ class InferenceManager:
             "Processing complete"
         )
     
+    def _check_ffmpeg(self):
+        """Check if ffmpeg is installed and available in the system PATH."""
+        try:
+            # Use subprocess.run to check for ffmpeg, hiding output
+            subprocess.run(['ffmpeg', '-version'], check=True, capture_output=True, text=True)
+            return True
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return False
+
+    def _extract_frames(self, video_path, output_dir):
+        """Extract all frames from a video using ffmpeg."""
+        self.progress.update_progress(ProgressStage.PRE_PROCESSING, "Extracting video frames...")
+        
+        # Use a padded 8-digit pattern for frame filenames
+        frame_pattern = os.path.join(output_dir, 'frame_%08d.jpg')
+        
+        ffmpeg_cmd = [
+            'ffmpeg', '-i', video_path, 
+            '-qscale:v', '16',  # High-quality JPEG
+            '-f', 'image2', frame_pattern
+        ]
+        
+        print(f"--> _extract_frames: Running command: {' '.join(ffmpeg_cmd)}", file=sys.stderr)
+        result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            error_msg = f"FFmpeg frame extraction error for {os.path.basename(video_path)}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            print(error_msg)
+            raise RuntimeError(f"Failed to extract frames from video. FFmpeg stderr: {result.stderr}")
+        
+        extracted_frames = sorted(glob.glob(os.path.join(output_dir, 'frame_*.jpg')))
+        if not extracted_frames:
+            raise RuntimeError("Frame extraction produced no files. Check video path and format.")
+            
+        return extracted_frames
+
+    def _assemble_video(self, frames_pattern, fps, output_path):
+        """Assemble a video from a sequence of frames using a web-friendly ffmpeg command."""
+        self.progress.update_progress(ProgressStage.POST_PROCESSING, f"Assembling video: {os.path.basename(output_path)}")
+        
+        ffmpeg_cmd = [
+            'ffmpeg', '-y', '-framerate', str(fps), 
+            '-i', frames_pattern,
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+            '-movflags', '+faststart',
+            output_path
+        ]
+        
+        result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"FFmpeg video assembly error for {os.path.basename(output_path)}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+            # Do not raise an error, as this is a final, non-critical step
+    
     def _inference_worker(self, inference_queue, post_proc_queue):
         """Worker thread that runs model inference on batches of frames."""
         while True:
@@ -348,12 +402,16 @@ class InferenceManager:
                 post_proc_queue.put(None)
                 break
             
-            frames, indices = batch_data
+            frame_paths, indices = batch_data
+            
+            # Read frames from disk
+            frames = [cv2.imread(p) for p in frame_paths]
+            
             results = self._infer_batch(frames)
             post_proc_queue.put((frames, indices, results))
 
-    def _post_processing_worker(self, post_proc_queue, stats_calculator, raw_out, out, total_frames):
-        """Worker thread that processes inference results."""
+    def _post_processing_worker(self, post_proc_queue, stats_calculator, annotated_frames_dir, total_frames):
+        """Worker thread that processes inference results and saves annotated frames."""
         while True:
             proc_data = post_proc_queue.get()
             if proc_data is None:
@@ -365,11 +423,12 @@ class InferenceManager:
                 per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
                 stats_calculator.process_frame(frm_idx, frm, per_frame_results)
                 
-                if raw_out is not None:
-                    raw_out.write(frm)
-                if out is not None:
+                # If video generation is enabled, write the annotated frame to its own directory
+                if self.generate_videos and annotated_frames_dir:
                     annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                    out.write(annotated_frame)
+                    frame_filename = f"frame_{frm_idx:08d}.jpg"
+                    output_path = os.path.join(annotated_frames_dir, frame_filename)
+                    cv2.imwrite(output_path, annotated_frame)
                 
                 progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
                 self.progress.update_progress(
@@ -386,88 +445,107 @@ class InferenceManager:
         start_time = time.time()
         self.gpu_manager.reset_peak_memory_stats()
 
-        # Create a dedicated directory for the results
+        # Create dedicated directories for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
         
-        # Generate output paths within the new directory
-        output_path = os.path.join(result_dir, 'output.mp4')
-        raw_path = os.path.join(result_dir, 'raw.mp4')
+        # --- Start of New Frame-Based Workflow ---
+
+        # 0. Verify ffmpeg is available before starting
+        print("--> _process_video: Entered.", file=sys.stderr)
+        if not self._check_ffmpeg():
+            error_msg = "ffmpeg command not found. Please ensure ffmpeg is installed and in your system's PATH."
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            print(error_msg)
+            return
+
+        # 1. Extract frames to a temporary directory
+        raw_frames_dir = os.path.join(result_dir, 'frames_raw')
+        os.makedirs(raw_frames_dir, exist_ok=True)
+        
+        try:
+            frame_files = self._extract_frames(video_path, raw_frames_dir)
+            total_frames = len(frame_files)
+        except Exception as e:
+            # Provide a more specific and helpful error message
+            error_details = str(e)
+            # Clean up the ffmpeg stderr for better readability in the UI
+            if "FFmpeg stderr:" in error_details:
+                error_details = error_details.split("FFmpeg stderr:")[1].strip()
+            
+            error_msg = f"Failed during frame extraction: {error_details}"
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            # Log the full error to console for debugging
+            print(f"Error in _process_video during frame extraction: {type(e).__name__}: {e}", file=sys.stderr)
+            return
+            
+        # Get video properties from the source video for ffmpeg assembly
+        try:
+            cap = cv2.VideoCapture(video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+        except Exception as e:
+            self.progress.update_progress(ProgressStage.ERROR, f"Could not read video properties: {e}")
+            # Fallback to sane defaults if reading fails
+            fps, width_cap, height_cap = 25, 1920, 1080
+
+        # Setup paths for outputs
         stats_file = os.path.join(result_dir, 'stats.json')
         
-        # Open the video
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        # Conditionally create video writers
-        out, raw_out = None, None
+        # Directory for annotated frames, only created if needed
+        annotated_frames_dir = None
         if self.generate_videos:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width_cap, height_cap))
-            raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width_cap, height_cap))
-            if not out.isOpened() or not raw_out.isOpened():
-                raise RuntimeError("Failed to create video writers")
+            annotated_frames_dir = os.path.join(result_dir, 'frames_annotated')
+            os.makedirs(annotated_frames_dir, exist_ok=True)
 
-        # Get video properties
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        
         # Create timeline database path
         timeline_db_path = os.path.join(result_dir, 'timeline.db')
         stats_calculator = StatisticsCalculator(self.class_names, self.logo_groups, total_frames, fps, db_path=timeline_db_path)
         
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
-            "Processing video",
+            "Processing video frames",
             frame=0,
             total_frames=total_frames,
             progress_percentage=0
         )
         
-        # The frame processing loop now only writes to the database via stats_calculator
         detection_start = time.time()
         self.gpu_manager.start_sampling()
 
-        # --- Start of Parallel Processing Setup ---
+        # --- Parallel Processing Setup ---
         
-        # Queues to buffer data between threads
-        # maxsize helps prevent the video reader from outpacing the processors and using too much RAM
         inference_queue = Queue(maxsize=self.batch_size * 2)
         post_proc_queue = Queue(maxsize=self.batch_size * 2)
 
-        # Start worker threads
+        # Start worker threads, passing the annotated frames directory to the post-processor
         inference_thread = threading.Thread(target=self._inference_worker, args=(inference_queue, post_proc_queue))
-        post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, raw_out, out, total_frames))
+        post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, annotated_frames_dir, total_frames))
         
         inference_thread.start()
         post_proc_thread.start()
         
-        # --- Main thread's job: Read frames and feed the pipeline ---
+        # --- Main thread: Feed frame paths to the pipeline ---
         
-        frame_count = 0
-        frames_buffer = []
+        frame_paths_buffer = []
         indices_buffer = []
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+        for i, frame_path in enumerate(frame_files):
+            frame_idx = i + 1
+            frame_paths_buffer.append(frame_path)
+            indices_buffer.append(frame_idx)
 
-            frame_count += 1
-            frames_buffer.append(frame)
-            indices_buffer.append(frame_count)
-
-            if len(frames_buffer) >= self.batch_size:
-                inference_queue.put((list(frames_buffer), list(indices_buffer)))
-                frames_buffer.clear()
+            if len(frame_paths_buffer) >= self.batch_size:
+                inference_queue.put((list(frame_paths_buffer), list(indices_buffer)))
+                frame_paths_buffer.clear()
                 indices_buffer.clear()
         
-        # Put the last partial batch on the queue
-        if frames_buffer:
-            inference_queue.put((frames_buffer, indices_buffer))
+        if frame_paths_buffer:
+            inference_queue.put((frame_paths_buffer, indices_buffer))
         
-        # Signal end of video to workers
+        # Signal end of frames to workers
         inference_queue.put(None)
         
         # Wait for threads to finish
@@ -476,23 +554,29 @@ class InferenceManager:
 
         # --- End of Parallel Processing ---
 
-        # Clean up
-        cap.release()
-        if out is not None: out.release()
-        if raw_out is not None: raw_out.release()
-        
         detection_end = time.time()
         self.gpu_manager.stop_sampling()
         
-        # Re-encode videos to H.264 using FFmpeg for browser compatibility (optional)
-        if self.generate_videos and self.convert_h264:
-            self.progress.update_progress(ProgressStage.POST_PROCESSING, "Converting videos to H.264 format")
-            try:
-                self._run_ffmpeg_reencode(output_path)
-                self._run_ffmpeg_reencode(raw_path)
-            except Exception as e:
-                print(f"Error during video re-encoding: {e}")
+        # 2. Assemble videos from frames using ffmpeg
+        if self.generate_videos:
+            # Assemble annotated video
+            annotated_output_path = os.path.join(result_dir, 'output.mp4')
+            annotated_frames_pattern = os.path.join(annotated_frames_dir, 'frame_%08d.jpg')
+            self._assemble_video(annotated_frames_pattern, fps, annotated_output_path)
+            
+            # Assemble raw video from original frames
+            raw_output_path = os.path.join(result_dir, 'raw.mp4')
+            raw_frames_pattern = os.path.join(raw_frames_dir, 'frame_%08d.jpg')
+            self._assemble_video(raw_frames_pattern, fps, raw_output_path)
         
+        # 3. Clean up frame directories
+        try:
+            shutil.rmtree(raw_frames_dir)
+            if annotated_frames_dir:
+                shutil.rmtree(annotated_frames_dir)
+        except OSError as e:
+            print(f"Error cleaning up frame directories: {e}")
+
         # Finalize statistics
         self.progress.update_progress(ProgressStage.POST_PROCESSING, "Aggregating statistics")
         
@@ -529,7 +613,6 @@ class InferenceManager:
 
         # Large per-frame JSON files are no longer created. All data is in timeline.db.
         
-        # Update progress
         self.progress.update_progress(ProgressStage.COMPLETE, "Processing complete")
 
     def _save_timeseries_data(self, result_dir, filename, total_frames, data):
