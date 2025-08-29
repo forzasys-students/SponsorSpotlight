@@ -352,29 +352,32 @@ class InferenceManager:
             return False
 
     def _extract_frames(self, video_path, output_dir):
-        """Extract all frames from a video using ffmpeg."""
-        self.progress.update_progress(ProgressStage.PRE_PROCESSING, "Extracting video frames...")
-        
+        """Extract all frames from a video file or stream using ffmpeg."""
+        is_url = self._is_url(video_path)
+        stage_message = "Extracting video frames from stream..." if is_url else "Extracting video frames..."
+        self.progress.update_progress(ProgressStage.PRE_PROCESSING, stage_message)
+
         # Use a padded 8-digit pattern for frame filenames
         frame_pattern = os.path.join(output_dir, 'frame_%08d.jpg')
-        
+
         ffmpeg_cmd = [
-            'ffmpeg', '-i', video_path, 
+            'ffmpeg', '-i', video_path,
             '-qscale:v', '16',  # High-quality JPEG
             '-f', 'image2', frame_pattern
         ]
-        
+
         print(f"--> _extract_frames: Running command: {' '.join(ffmpeg_cmd)}", file=sys.stderr)
         result = subprocess.run(ffmpeg_cmd, check=False, capture_output=True, text=True)
         if result.returncode != 0:
-            error_msg = f"FFmpeg frame extraction error for {os.path.basename(video_path)}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            source_name = "stream" if is_url else os.path.basename(video_path)
+            error_msg = f"FFmpeg frame extraction error for {source_name}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             print(error_msg)
             raise RuntimeError(f"Failed to extract frames from video. FFmpeg stderr: {result.stderr}")
-        
+
         extracted_frames = sorted(glob.glob(os.path.join(output_dir, 'frame_*.jpg')))
         if not extracted_frames:
             raise RuntimeError("Frame extraction produced no files. Check video path and format.")
-            
+
         return extracted_frames
 
     def _assemble_video(self, frames_pattern, fps, output_path):
@@ -440,60 +443,11 @@ class InferenceManager:
                     gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
                 )
 
-    def _process_video(self, video_path, file_hash):
-        """Process a video for logo detection"""
-        start_time = time.time()
-        self.gpu_manager.reset_peak_memory_stats()
-
-        # Create dedicated directories for the results
+    def _process_frames_in_parallel(self, file_hash, frame_files, total_frames, fps, width_cap, height_cap, start_time):
+        """Orchestrates the parallel processing of extracted video frames."""
         result_dir = os.path.join(self.output_dir, file_hash)
-        os.makedirs(result_dir, exist_ok=True)
-        
-        # --- Start of New Frame-Based Workflow ---
-
-        # 0. Verify ffmpeg is available before starting
-        print("--> _process_video: Entered.", file=sys.stderr)
-        if not self._check_ffmpeg():
-            error_msg = "ffmpeg command not found. Please ensure ffmpeg is installed and in your system's PATH."
-            self.progress.update_progress(ProgressStage.ERROR, error_msg)
-            print(error_msg)
-            return
-
-        # 1. Extract frames to a temporary directory
-        raw_frames_dir = os.path.join(result_dir, 'frames_raw')
-        os.makedirs(raw_frames_dir, exist_ok=True)
-        
-        try:
-            frame_files = self._extract_frames(video_path, raw_frames_dir)
-            total_frames = len(frame_files)
-        except Exception as e:
-            # Provide a more specific and helpful error message
-            error_details = str(e)
-            # Clean up the ffmpeg stderr for better readability in the UI
-            if "FFmpeg stderr:" in error_details:
-                error_details = error_details.split("FFmpeg stderr:")[1].strip()
-            
-            error_msg = f"Failed during frame extraction: {error_details}"
-            self.progress.update_progress(ProgressStage.ERROR, error_msg)
-            # Log the full error to console for debugging
-            print(f"Error in _process_video during frame extraction: {type(e).__name__}: {e}", file=sys.stderr)
-            return
-            
-        # Get video properties from the source video for ffmpeg assembly
-        try:
-            cap = cv2.VideoCapture(video_path)
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
-        except Exception as e:
-            self.progress.update_progress(ProgressStage.ERROR, f"Could not read video properties: {e}")
-            # Fallback to sane defaults if reading fails
-            fps, width_cap, height_cap = 25, 1920, 1080
-
-        # Setup paths for outputs
         stats_file = os.path.join(result_dir, 'stats.json')
-        
+
         # Directory for annotated frames, only created if needed
         annotated_frames_dir = None
         if self.generate_videos:
@@ -503,7 +457,7 @@ class InferenceManager:
         # Create timeline database path
         timeline_db_path = os.path.join(result_dir, 'timeline.db')
         stats_calculator = StatisticsCalculator(self.class_names, self.logo_groups, total_frames, fps, db_path=timeline_db_path)
-        
+
         self.progress.update_progress(
             ProgressStage.INFERENCE_PROGRESS,
             "Processing video frames",
@@ -511,24 +465,21 @@ class InferenceManager:
             total_frames=total_frames,
             progress_percentage=0
         )
-        
+
         detection_start = time.time()
         self.gpu_manager.start_sampling()
 
         # --- Parallel Processing Setup ---
-        
         inference_queue = Queue(maxsize=self.batch_size * 2)
         post_proc_queue = Queue(maxsize=self.batch_size * 2)
 
-        # Start worker threads, passing the annotated frames directory to the post-processor
         inference_thread = threading.Thread(target=self._inference_worker, args=(inference_queue, post_proc_queue))
         post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, annotated_frames_dir, total_frames))
-        
+
         inference_thread.start()
         post_proc_thread.start()
-        
+
         # --- Main thread: Feed frame paths to the pipeline ---
-        
         frame_paths_buffer = []
         indices_buffer = []
 
@@ -541,23 +492,24 @@ class InferenceManager:
                 inference_queue.put((list(frame_paths_buffer), list(indices_buffer)))
                 frame_paths_buffer.clear()
                 indices_buffer.clear()
-        
+
         if frame_paths_buffer:
             inference_queue.put((frame_paths_buffer, indices_buffer))
-        
+
         # Signal end of frames to workers
         inference_queue.put(None)
-        
+
         # Wait for threads to finish
         inference_thread.join()
         post_proc_thread.join()
 
         # --- End of Parallel Processing ---
-
         detection_end = time.time()
         self.gpu_manager.stop_sampling()
-        
-        # 2. Assemble videos from frames using ffmpeg
+
+        raw_frames_dir = os.path.dirname(frame_files[0]) if frame_files else None
+
+        # Assemble videos from frames using ffmpeg
         if self.generate_videos:
             # Assemble annotated video
             annotated_output_path = os.path.join(result_dir, 'output.mp4')
@@ -565,13 +517,15 @@ class InferenceManager:
             self._assemble_video(annotated_frames_pattern, fps, annotated_output_path)
             
             # Assemble raw video from original frames
-            raw_output_path = os.path.join(result_dir, 'raw.mp4')
-            raw_frames_pattern = os.path.join(raw_frames_dir, 'frame_%08d.jpg')
-            self._assemble_video(raw_frames_pattern, fps, raw_output_path)
-        
-        # 3. Clean up frame directories
+            if raw_frames_dir:
+                raw_output_path = os.path.join(result_dir, 'raw.mp4')
+                raw_frames_pattern = os.path.join(raw_frames_dir, 'frame_%08d.jpg')
+                self._assemble_video(raw_frames_pattern, fps, raw_output_path)
+
+        # Clean up frame directories
         try:
-            shutil.rmtree(raw_frames_dir)
+            if raw_frames_dir:
+                shutil.rmtree(raw_frames_dir)
             if annotated_frames_dir:
                 shutil.rmtree(annotated_frames_dir)
         except OSError as e:
@@ -579,9 +533,9 @@ class InferenceManager:
 
         # Finalize statistics
         self.progress.update_progress(ProgressStage.POST_PROCESSING, "Aggregating statistics")
-        
+
         final_stats, _, _, _ = stats_calculator.finalize_stats()
-        
+
         # Prepare final JSON output with metadata
         processing_info = {
             "device": self.gpu_manager.device,
@@ -611,9 +565,49 @@ class InferenceManager:
         with open(stats_file, "w") as f:
             json.dump(output_data, f, indent=4)
 
-        # Large per-frame JSON files are no longer created. All data is in timeline.db.
-        
         self.progress.update_progress(ProgressStage.COMPLETE, "Processing complete")
+
+    def _process_video(self, video_path, file_hash):
+        """Process a video from a local file for logo detection."""
+        start_time = time.time()
+        self.gpu_manager.reset_peak_memory_stats()
+
+        result_dir = os.path.join(self.output_dir, file_hash)
+        os.makedirs(result_dir, exist_ok=True)
+        
+        if not self._check_ffmpeg():
+            error_msg = "ffmpeg command not found. Please ensure ffmpeg is installed and in your system's PATH."
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            print(error_msg)
+            return
+
+        raw_frames_dir = os.path.join(result_dir, 'frames_raw')
+        os.makedirs(raw_frames_dir, exist_ok=True)
+        
+        try:
+            frame_files = self._extract_frames(video_path, raw_frames_dir)
+            total_frames = len(frame_files)
+        except Exception as e:
+            error_details = str(e)
+            if "FFmpeg stderr:" in error_details:
+                error_details = error_details.split("FFmpeg stderr:")[1].strip()
+            error_msg = f"Failed during frame extraction: {error_details}"
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            print(f"Error in _process_video during frame extraction: {type(e).__name__}: {e}", file=sys.stderr)
+            return
+            
+        try:
+            cap = cv2.VideoCapture(video_path)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width_cap = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height_cap = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+        except Exception as e:
+            self.progress.update_progress(ProgressStage.ERROR, f"Could not read video properties: {e}")
+            fps, width_cap, height_cap = 25, 1920, 1080
+
+        # Call the shared processing logic
+        self._process_frames_in_parallel(file_hash, frame_files, total_frames, fps, width_cap, height_cap, start_time)
 
     def _save_timeseries_data(self, result_dir, filename, total_frames, data):
         try:
@@ -631,25 +625,21 @@ class InferenceManager:
         return path.startswith('http://') or path.startswith('https://')
     
     def _process_video_stream(self, url, file_hash):
-        # This method has a lot of duplicated logic with _process_video.
-        # For this refactoring, I will leave it as is, but it's a candidate for a future cleanup
-        # to merge the common logic. The main difference is reading frames from ffmpeg pipe vs. cv2.VideoCapture.
-        
+        """Process a video from a URL for logo detection using a frame-based workflow."""
         start_time = time.time()
         self.gpu_manager.reset_peak_memory_stats()
-        
-        # Resolve to highest-quality variant if this is a master HLS playlist
+
         url = self._resolve_hls_highest_variant(url)
-        # Create a dedicated directory for the results
         result_dir = os.path.join(self.output_dir, file_hash)
         os.makedirs(result_dir, exist_ok=True)
         
-        # Generate output paths within the new directory
-        output_path = os.path.join(result_dir, 'output.mp4')
-        raw_path = os.path.join(result_dir, 'raw.mp4')
-        stats_file = os.path.join(result_dir, 'stats.json')
-        
-        # Probe stream
+        if not self._check_ffmpeg():
+            error_msg = "ffmpeg command not found. Please ensure ffmpeg is installed and in your system's PATH."
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            print(error_msg)
+            return
+
+        # Probe stream to get properties
         try:
             probe = subprocess.run([
                 'ffprobe', '-v', 'error', '-select_streams', 'v:0',
@@ -665,158 +655,23 @@ class InferenceManager:
         except Exception:
             width, height, fps = 1280, 720, 25.0
 
-        # Try to estimate total duration from media playlist if available (for better progress)
-        estimated_total_frames = None
+        raw_frames_dir = os.path.join(result_dir, 'frames_raw')
+        os.makedirs(raw_frames_dir, exist_ok=True)
+
         try:
-            pl = requests.get(url, timeout=10).text
-            if '#EXTINF' in pl:
-                total_sec = sum(float(line.split(':', 1)[1].split(',')[0]) for line in pl.splitlines() if line.startswith('#EXTINF:'))
-                if total_sec > 0 and fps > 0:
-                    estimated_total_frames = int(total_sec * fps)
-        except Exception:
-            pass
+            frame_files = self._extract_frames(url, raw_frames_dir)
+            total_frames = len(frame_files)
+        except Exception as e:
+            error_details = str(e)
+            if "FFmpeg stderr:" in error_details:
+                error_details = error_details.split("FFmpeg stderr:")[1].strip()
+            error_msg = f"Failed during frame extraction from stream: {error_details}"
+            self.progress.update_progress(ProgressStage.ERROR, error_msg)
+            print(f"Error in _process_video_stream during frame extraction: {type(e).__name__}: {e}", file=sys.stderr)
+            return
 
-        # Start ffmpeg pipe
-        ffmpeg_cmd = [
-            'ffmpeg', '-i', url, '-f', 'image2pipe', '-pix_fmt', 'bgr24', '-vcodec', 'rawvideo', '-'
-        ]
-        pipe = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10**8)
-
-        # Conditionally create video writers
-        out, raw_out = None, None
-        if self.generate_videos:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-            raw_out = cv2.VideoWriter(raw_path, fourcc, fps, (width, height))
-            if not out.isOpened() or not raw_out.isOpened():
-                raise RuntimeError("Failed to create video writers")
-
-        # The frame processing loop for streams is very similar to file-based videos.
-        # This is a good candidate for future refactoring to reduce duplication.
-        # For now, we keep it separate to ensure no functionality is broken.
-        
-        frame_count = 0
-        # Create timeline database path
-        timeline_db_path = os.path.join(result_dir, 'timeline.db')
-        stats_calculator = StatisticsCalculator(self.class_names, self.logo_groups, estimated_total_frames or 0, fps, db_path=timeline_db_path)
-        
-        self.progress.update_progress(
-            ProgressStage.INFERENCE_PROGRESS, "Processing stream",
-            frame=frame_count, total_frames=estimated_total_frames, progress_percentage=0
-        )
-        
-        detection_start = time.time()
-        self.gpu_manager.start_sampling()
-
-        frames_buffer = []
-        indices_buffer = []
-
-        while True:
-            raw = pipe.stdout.read(width * height * 3)
-            if not raw:
-                # End of stream, flush any remaining buffered frames
-                if len(frames_buffer) > 0:
-                    results_batch = self._infer_batch(frames_buffer)
-                    for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
-                        per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
-                        stats_calculator.process_frame(frm_idx, frm, per_frame_results)
-                        if raw_out is not None:
-                            raw_out.write(frm)
-                        if out is not None:
-                            annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                            out.write(annotated_frame)
-                        progress_pct = (frm_idx / estimated_total_frames * 100) if estimated_total_frames else 0
-                        progress_pct = min(100, max(0, progress_pct))
-                        self.progress.update_progress(
-                            ProgressStage.INFERENCE_PROGRESS,
-                            f"Processing frame {frm_idx}{f' (~{round(progress_pct)}%)' if estimated_total_frames else ''}",
-                            frame=frm_idx,
-                            total_frames=estimated_total_frames,
-                            progress_percentage=progress_pct,
-                            gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                        )
-                break  # Exit the loop
-
-            frame = np.frombuffer(raw, dtype='uint8').reshape((height, width, 3))
-            frame_count += 1
-
-            frames_buffer.append(frame)
-            indices_buffer.append(frame_count)
-
-            if len(frames_buffer) >= self.batch_size:
-                results_batch = self._infer_batch(frames_buffer)
-                for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
-                    per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
-                    stats_calculator.process_frame(frm_idx, frm, per_frame_results)
-                    if raw_out is not None:
-                        raw_out.write(frm)
-                    if out is not None:
-                        annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                        out.write(annotated_frame)
-                    progress_pct = (frm_idx / estimated_total_frames * 100) if estimated_total_frames else 0
-                    progress_pct = min(100, max(0, progress_pct))
-                    self.progress.update_progress(
-                        ProgressStage.INFERENCE_PROGRESS,
-                        f"Processing frame {frm_idx}{f' (~{round(progress_pct)}%)' if estimated_total_frames else ''}",
-                        frame=frm_idx,
-                        total_frames=estimated_total_frames,
-                        progress_percentage=progress_pct,
-                        gpu_peak_mb=self.gpu_manager.get_peak_memory_allocated_mb()
-                    )
-                frames_buffer.clear()
-                indices_buffer.clear()
-
-        pipe.stdout.close()
-        pipe.wait()
-        
-        if out: out.release()
-        if raw_out: raw_out.release()
-        
-        detection_end = time.time()
-        self.gpu_manager.stop_sampling()
-        
-        if self.generate_videos and self.convert_h264:
-            self.progress.update_progress(ProgressStage.POST_PROCESSING, "Re-encoding video for web playback")
-            try:
-                self._run_ffmpeg_reencode(output_path)
-                self._run_ffmpeg_reencode(raw_path)
-            except Exception as e:
-                print(f"Error during video re-encoding: {e}")
-
-        # Finalize statistics, now using the actual frame count
-        stats_calculator.total_frames = frame_count
-        stats_calculator.total_video_time = frame_count * stats_calculator.frame_time
-        final_stats, _, _, _ = stats_calculator.finalize_stats()
-        
-        processing_info = {
-            "device": self.gpu_manager.device,
-            "device_name": self.gpu_manager.device_name,
-            "gpu_total_vram_mb": int(self.gpu_manager.gpu_total_mem_bytes / (1024**2)) if self.gpu_manager.gpu_total_mem_bytes else None,
-            "gpu_peak_allocated_mb": self.gpu_manager.get_peak_memory_allocated_mb(),
-            "gpu_peak_utilization_pct": int(self.gpu_manager.gpu_peak_util_pct) if self.gpu_manager.gpu_peak_util_pct is not None else None,
-            "start_time": int(start_time),
-            "end_time": int(time.time()),
-            "duration_sec": round(max(0.0, time.time() - start_time), 2),
-            "detection_duration_sec": round(max(0.0, detection_end - detection_start), 2)
-        }
-
-        output_data = {
-            "video_metadata": {
-                "duration": round(stats_calculator.total_video_time, 2),
-                "fps": round(fps, 2),
-                "total_frames": frame_count,
-                "width": width,
-                "height": height
-            },
-            "logo_stats": final_stats,
-            "processing_info": processing_info
-        }
-        with open(stats_file, "w") as f:
-            json.dump(output_data, f, indent=4)
-        
-        # Large per-frame JSON files are no longer created. All data is in timeline.db.
-        
-        self.progress.update_progress(ProgressStage.COMPLETE, "Processing complete")
+        # Call the shared processing logic
+        self._process_frames_in_parallel(file_hash, frame_files, total_frames, fps, width, height, start_time)
 
     def _run_ffmpeg_reencode(self, input_path):
         """Helper to run ffmpeg for re-encoding a video file."""
