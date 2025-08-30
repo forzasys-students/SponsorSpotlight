@@ -74,7 +74,7 @@
                                 <div class="video-result-container position-relative">
                                     {% if output_path %}
                                     <video id="mainVideo" controls class="w-100 rounded" poster="">
-                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/raw.mp4') }}" type="video/mp4">
+                                        <source src="{{ url_for('video_bp.stream', file_hash=file_hash, video_type='raw') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                     <canvas id="overlayCanvas" class="position-absolute top-0 start-0"></canvas>
@@ -86,12 +86,18 @@
                                     </div>
                                 {% endif %}
                                 </div>
+                                <!-- Thumbnail preview bar for the On-demand tab -->
+                                {% if output_path %}
+                                <div id="thumbnail-preview-bar" class="thumbnail-bar mt-2">
+                                    <div id="thumbnail-preview-img" class="thumbnail-img"></div>
+                                </div>
+                                {% endif %}
                             </div>
                             <div class="tab-pane fade" id="tab-annotated" role="tabpanel" aria-labelledby="tab-annotated-link">
                                 <div class="video-result-container">
                                     {% if output_path %}
                                     <video id="annotatedVideo" controls class="w-100 rounded" poster="">
-                                        <source src="{{ url_for('static', filename='results/' + file_hash + '/output.mp4') }}" type="video/mp4">
+                                        <source src="{{ url_for('video_bp.stream', file_hash=file_hash, video_type='output') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                     {% else %}
@@ -267,6 +273,10 @@
             let startTime = 0;
             if (timeParam) {
                 startTime = parseFloat(timeParam);
+            }
+
+            if (fileType === 'video') {
+                setupThumbnailPreview();
             }
 
             // Fetch main statistics
@@ -849,6 +859,48 @@
                 const mins = Math.floor(seconds / 60);
                 const secs = Math.floor(seconds % 60);
                 return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function setupThumbnailPreview() {
+                const previewBar = document.getElementById('thumbnail-preview-bar');
+                const previewImg = document.getElementById('thumbnail-preview-img');
+                const video = document.getElementById('mainVideo');
+
+                if (!previewBar || !previewImg || !video) return;
+
+                const spriteUrl = `/static/results/${fileHash}/thumbnail_sprite.jpg`;
+                previewImg.style.backgroundImage = `url(${spriteUrl})`;
+
+                // We need to know the number of thumbnails to calculate the positions
+                // We can get this from the video duration and thumbnail interval (e.g., 30s)
+                // Let's assume a 30s interval for now.
+                const interval = 30; 
+                let numThumbnails = 0;
+                let thumbWidth = 160; // Should match backend
+
+                video.addEventListener('loadedmetadata', () => {
+                    numThumbnails = Math.floor(video.duration / interval);
+                    // Adjust the width of the preview image container to fit all thumbnails
+                    previewImg.style.width = `${numThumbnails * thumbWidth}px`;
+                });
+
+                previewBar.addEventListener('mousemove', function(e) {
+                    if (numThumbnails === 0) return;
+                    const rect = previewBar.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const hoverTime = (x / rect.width) * video.duration;
+                    
+                    const thumbIndex = Math.floor(hoverTime / interval);
+                    const backgroundPosX = -(thumbIndex * thumbWidth);
+                    
+                    previewImg.style.backgroundPosition = `${backgroundPosX}px 0px`;
+                });
+
+                previewBar.addEventListener('click', function(e) {
+                    const rect = previewBar.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    video.currentTime = (x / rect.width) * video.duration;
+                });
             }
         });
 

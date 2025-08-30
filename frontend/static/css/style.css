@@ -291,6 +291,24 @@ body {
     margin-bottom: 0.5rem;
 }
 
+/* Thumbnail Preview Bar */
+.thumbnail-bar {
+    width: 100%;
+    height: 90px; /* Adjust as needed */
+    background-color: #222;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.thumbnail-img {
+    height: 100%;
+    background-size: cover;
+    background-repeat: no-repeat;
+    transition: background-position 0.1s linear;
+}
+
 .quick-stat h4 {
     font-weight: 700;
     color: #f0f6fc;
