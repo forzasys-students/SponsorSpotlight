@@ -25,6 +25,10 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
         file_type = 'video'
         original_name = url.split('/')[-1] or 'remote_stream'
 
+        # Capture video generation flags (defaults from config)
+        gen_raw = bool(data.get('generate_raw_video', True))
+        gen_annot = bool(data.get('generate_annotated_video', True))
+
         # If results already exist, reuse them
         result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
         stats_path = os.path.join(result_dir, 'stats.json')
@@ -33,7 +37,9 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
                 'path': url,
                 'type': file_type,
                 'hash': file_hash,
-                'original_name': original_name
+                'original_name': original_name,
+                'generate_raw_video': gen_raw,
+                'generate_annotated_video': gen_annot,
             }
             return jsonify({'redirect': url_for('show_results', file_hash=file_hash)})
 
@@ -42,7 +48,9 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
             'path': url,
             'type': file_type,
             'hash': file_hash,
-            'original_name': original_name
+            'original_name': original_name,
+            'generate_raw_video': gen_raw,
+            'generate_annotated_video': gen_annot,
         }
         return jsonify({'redirect': url_for('process_file')})
 
@@ -77,6 +85,10 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
             else:
                 file_type = 'video'
 
+            # Capture flags from form (checkboxes present only for videos)
+            gen_raw = request.form.get('generate_raw_video') == 'on'
+            gen_annot = request.form.get('generate_annotated_video') == 'on'
+
             # If results already exist, reuse them
             result_dir = os.path.join(app.config['RESULTS_FOLDER'], file_hash)
             stats_path = os.path.join(result_dir, 'stats.json')
@@ -85,7 +97,9 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
                     'path': file_path,
                     'type': file_type,
                     'hash': file_hash,
-                    'original_name': filename
+                    'original_name': filename,
+                    'generate_raw_video': gen_raw,
+                    'generate_annotated_video': gen_annot,
                 }
                 return redirect(url_for('show_results', file_hash=file_hash))
             
@@ -94,7 +108,9 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
                 'path': file_path,
                 'type': file_type,
                 'hash': file_hash,
-                'original_name': filename
+                'original_name': filename,
+                'generate_raw_video': gen_raw,
+                'generate_annotated_video': gen_annot,
             }
             
             # Redirect to processing page
@@ -115,11 +131,13 @@ def register_main_routes(app, inference_manager, allowed_file, get_file_hash, ge
         if os.path.exists(stats_path):
             return redirect(url_for('show_results', file_hash=file_info['hash']))
         
-        # Start processing in a separate thread
+        # Start processing in a separate thread with user flags
         inference_manager.start_inference(
             file_info['type'], 
             file_info['path'], 
-            file_info['hash']
+            file_info['hash'],
+            generate_raw_video=bool(file_info.get('generate_raw_video', True)),
+            generate_annotated_video=bool(file_info.get('generate_annotated_video', True))
         )
         
         return render_template('processing.html', file_type=file_info['type'])

@@ -35,6 +35,48 @@
                     </div>
                 </div>
 
+                <!-- Video Generation Options Summary -->
+                {% if file_type == 'video' %}
+                <div class="card mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-gear-fill"></i> Video Generation Options
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-play-circle-fill me-2 {% if has_raw %}text-success{% else %}text-muted{% endif %}"></i>
+                                    <span class="fw-bold">Raw Video (On-demand Overlay):</span>
+                                    <span class="ms-2 badge {% if has_raw %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {% if has_raw %}Generated{% else %}Skipped{% endif %}
+                                    </span>
+                                </div>
+                                <small class="text-muted">Enables interactive logo overlay and thumbnail navigation</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-palette-fill me-2 {% if has_annotated %}text-success{% else %}text-muted{% endif %}"></i>
+                                    <span class="fw-bold">Annotated Video:</span>
+                                    <span class="ms-2 badge {% if has_annotated %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {% if has_annotated %}Generated{% else %}Skipped{% endif %}
+                                    </span>
+                                </div>
+                                <small class="text-muted">Shows all logo detections with bounding boxes</small>
+                            </div>
+                        </div>
+                        {% if not has_raw and not has_annotated %}
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Fast Processing Mode:</strong> You chose to skip video generation for faster results. 
+                            All analytics, timeline data, and logo detection statistics are still available.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Processing metadata (device, detection-only duration, GPU utilization) -->
                 <div id="processing-meta" class="alert alert-secondary py-2 px-3 small d-none">
                     <div class="d-flex flex-wrap gap-3 align-items-center mb-1">
@@ -62,52 +104,49 @@
                             </div>
                         {% else %}
                         <ul class="nav nav-tabs px-3 pt-3" role="tablist">
+                            {% if has_raw %}
                             <li class="nav-item" role="presentation">
                                 <button class="nav-link active" id="tab-ondemand-link" data-bs-toggle="tab" data-bs-target="#tab-ondemand" type="button" role="tab">On-demand Overlay</button>
                             </li>
+                            {% endif %}
+                            {% if has_annotated %}
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="tab-annotated-link" data-bs-toggle="tab" data-bs-target="#tab-annotated" type="button" role="tab">All Annotations</button>
+                                <button class="nav-link {% if not has_raw %}active{% endif %}" id="tab-annotated-link" data-bs-toggle="tab" data-bs-target="#tab-annotated" type="button" role="tab">All Annotations</button>
                             </li>
+                            {% endif %}
                         </ul>
                         <div class="tab-content p-3 pt-2">
+                            {% if has_raw %}
                             <div class="tab-pane fade show active" id="tab-ondemand" role="tabpanel" aria-labelledby="tab-ondemand-link">
                                 <div class="video-result-container position-relative">
-                                    {% if output_path %}
                                     <video id="mainVideo" controls class="w-100 rounded" poster="">
                                         <source src="{{ url_for('video_bp.stream', file_hash=file_hash, video_type='raw') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                     <canvas id="overlayCanvas" class="position-absolute top-0 start-0"></canvas>
-                                {% else %}
-                                    <div class="alert alert-warning text-center">
-                                        <i class="bi bi-exclamation-triangle-fill"></i>
-                                        Video preview not available. The video file may not have been generated correctly.
-                                        However, all statistics and timeline data are still available.
-                                    </div>
-                                {% endif %}
                                 </div>
                                 <!-- Thumbnail preview bar for the On-demand tab -->
-                                {% if output_path %}
                                 <div id="thumbnail-preview-bar" class="thumbnail-bar mt-2">
                                     <div id="thumbnail-preview-img" class="thumbnail-img"></div>
                                 </div>
-                                {% endif %}
                             </div>
-                            <div class="tab-pane fade" id="tab-annotated" role="tabpanel" aria-labelledby="tab-annotated-link">
+                            {% endif %}
+                            {% if has_annotated %}
+                            <div class="tab-pane fade {% if not has_raw %}show active{% endif %}" id="tab-annotated" role="tabpanel" aria-labelledby="tab-annotated-link">
                                 <div class="video-result-container">
-                                    {% if output_path %}
                                     <video id="annotatedVideo" controls class="w-100 rounded" poster="">
                                         <source src="{{ url_for('video_bp.stream', file_hash=file_hash, video_type='output') }}" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
-                                    {% else %}
-                                        <div class="alert alert-warning text-center">
-                                            <i class="bi bi-exclamation-triangle-fill"></i>
-                                            Annotated video is not available.
-                                        </div>
-                                    {% endif %}
                                 </div>
                             </div>
+                            {% endif %}
+                            {% if not has_raw and not has_annotated %}
+                            <div class="alert alert-warning m-3">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                Video preview not available. You chose to skip video generation. Analytics are still available.
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
                     </div>
@@ -240,6 +279,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             const fileType = '{{ file_type }}';
             const fileHash = '{{ file_hash }}';
+            const hasRaw = Boolean('{{ has_raw|lower }}' === 'true');
+            const hasAnnotated = Boolean('{{ has_annotated|lower }}' === 'true');
             const video = document.getElementById('mainVideo');
             let videoMetadata = {};
             let logoStats = {};
@@ -275,7 +316,7 @@
                 startTime = parseFloat(timeParam);
             }
 
-            if (fileType === 'video') {
+            if (fileType === 'video' && hasRaw) {
                 setupThumbnailPreview();
             }
 

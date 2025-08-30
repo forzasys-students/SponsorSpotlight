@@ -666,3 +666,25 @@ footer {
   pointer-events: none;
 }
 
+/* Switch panel styles for video generation options */
+.switch-panel {
+    background-color: #f8f9fa;
+    color: #000;
+    margin-bottom: 1rem;
+}
+.switch-panel .form-switch .form-check-input {
+    width: 2.75rem;
+    height: 1.4rem;
+    cursor: pointer;
+}
+.switch-panel .form-switch .form-check-input:focus {
+    box-shadow: 0 0 0 0.15rem rgba(13,110,253,.15);
+}
+.switch-panel .form-switch .form-check-input:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+.switch-panel .form-switch .form-check-label {
+    margin-left: .25rem;
+}
+

@@ -75,6 +75,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewImg = document.getElementById('urlPreview');
     const processUrlBtn = document.getElementById('processUrlBtn');
 
+    const genRawUrl = document.getElementById('genRawUrl');
+    const genAnnotUrl = document.getElementById('genAnnotUrl');
+
     const debounce = (fn, delay = 600) => {
         let t;
         return (...args) => {
@@ -118,10 +121,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Please paste a URL.');
                 return;
             }
+            const body = {
+                url,
+                generate_raw_video: !!genRawUrl?.checked,
+                generate_annotated_video: !!genAnnotUrl?.checked
+            };
             fetch('/upload_url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+                body: JSON.stringify(body)
             })
             .then(r => r.json())
             .then(data => {

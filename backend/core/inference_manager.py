@@ -72,15 +72,20 @@ class InferenceManager:
         # Setup output directories
         os.makedirs(self.output_dir, exist_ok=True)
 
+        # Per-run flags (defaults; can be overridden per request)
+        self.generate_raw_video = True
+        self.generate_annotated_video = True
+        
         # Pipeline config: toggle video generation and H.264 conversion
-        self.generate_videos = True
         self.convert_h264 = True
         self.batch_size = 1
         self.precision = "fp32"  # Default to FP32 for compatibility
         try:
             with open(os.path.join(self.base_dir, 'pipeline_config.json'), 'r') as f:
                 cfg = json.load(f) or {}
-                self.generate_videos = bool(cfg.get('generate_videos', True))
+                # Defaults that can be overridden per run
+                self.generate_raw_video = bool(cfg.get('generate_raw_video', True))
+                self.generate_annotated_video = bool(cfg.get('generate_annotated_video', True))
                 self.convert_h264 = bool(cfg.get('convert_h264', True))
                 # Optional batch size for batched inference (>=1)
                 try:
@@ -90,7 +95,7 @@ class InferenceManager:
                 # Model precision: fp16 for speed, fp32 for compatibility
                 self.precision = str(cfg.get('precision', 'fp32')).lower()
         except Exception:
-            # Defaults remain True if config missing/unreadable
+            # Defaults remain if config missing/unreadable
             pass
     
     def _load_logo_groups(self):
@@ -184,8 +189,8 @@ class InferenceManager:
                     results_per_frame.append(res_single)
             return results_per_frame
     
-    def start_inference(self, mode, input_path, file_hash):
-        """Start the inference process in a separate thread"""
+    def start_inference(self, mode, input_path, file_hash, generate_raw_video=None, generate_annotated_video=None):
+        """Start the inference process in a separate thread, with optional per-run flags."""
         job_key = (mode, input_path, file_hash)
         with self._job_lock:
             # If same job is already active, don't start another
@@ -195,6 +200,11 @@ class InferenceManager:
             self._active_job_key = job_key
         def _runner():
             try:
+                # Apply per-run flag overrides if provided
+                if generate_raw_video is not None:
+                    self.generate_raw_video = bool(generate_raw_video)
+                if generate_annotated_video is not None:
+                    self.generate_annotated_video = bool(generate_annotated_video)
                 self._run_inference(mode, input_path, file_hash)
             finally:
                 with self._job_lock:
@@ -399,8 +409,8 @@ class InferenceManager:
             print(f"FFmpeg video assembly error for {os.path.basename(output_path)}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
             # Do not raise an error, as this is a final, non-critical step
     
-    def _inference_worker(self, inference_queue, post_proc_queue):
-        """Worker thread that runs model inference on batches of frames."""
+    def _inference_worker(self, inference_queue, post_proc_queue, annotated_frames_dir, total_frames):
+        """Worker thread that runs model inference on batches of frames and writes annotated frames if enabled."""
         while True:
             batch_data = inference_queue.get()
             if batch_data is None:
@@ -415,8 +425,17 @@ class InferenceManager:
             results = self._infer_batch(frames)
             post_proc_queue.put((frames, indices, results))
 
-    def _post_processing_worker(self, post_proc_queue, stats_calculator, annotated_frames_dir, total_frames):
-        """Worker thread that processes inference results and saves annotated frames."""
+            # If annotated video requested, write annotated frames here to avoid another pass
+            if self.generate_annotated_video and annotated_frames_dir:
+                for buf_idx, (frm, frm_idx) in enumerate(zip(frames, indices)):
+                    per_frame_results = [results[buf_idx]] if isinstance(results, list) else results
+                    annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
+                    frame_filename = f"frame_{frm_idx:08d}.jpg"
+                    output_path = os.path.join(annotated_frames_dir, frame_filename)
+                    cv2.imwrite(output_path, annotated_frame)
+
+    def _post_processing_worker(self, post_proc_queue, stats_calculator, total_frames):
+        """Worker thread that processes inference results for statistics only."""
         while True:
             proc_data = post_proc_queue.get()
             if proc_data is None:
@@ -427,13 +446,6 @@ class InferenceManager:
             for buf_idx, (frm, frm_idx) in enumerate(zip(frames_buffer, indices_buffer)):
                 per_frame_results = [results_batch[buf_idx]] if isinstance(results_batch, list) else results_batch
                 stats_calculator.process_frame(frm_idx, frm, per_frame_results)
-                
-                # If video generation is enabled, write the annotated frame to its own directory
-                if self.generate_videos and annotated_frames_dir:
-                    annotated_frame = self.annotator.annotate_frame(frm, per_frame_results)
-                    frame_filename = f"frame_{frm_idx:08d}.jpg"
-                    output_path = os.path.join(annotated_frames_dir, frame_filename)
-                    cv2.imwrite(output_path, annotated_frame)
                 
                 progress_percentage = (frm_idx / total_frames) * 100 if total_frames > 0 else 0
                 self.progress.update_progress(
@@ -452,7 +464,7 @@ class InferenceManager:
 
         # Directory for annotated frames, only created if needed
         annotated_frames_dir = None
-        if self.generate_videos:
+        if self.generate_annotated_video:
             annotated_frames_dir = os.path.join(result_dir, 'frames_annotated')
             os.makedirs(annotated_frames_dir, exist_ok=True)
 
@@ -475,8 +487,8 @@ class InferenceManager:
         inference_queue = Queue(maxsize=self.batch_size * 2)
         post_proc_queue = Queue(maxsize=self.batch_size * 2)
 
-        inference_thread = threading.Thread(target=self._inference_worker, args=(inference_queue, post_proc_queue))
-        post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, annotated_frames_dir, total_frames))
+        inference_thread = threading.Thread(target=self._inference_worker, args=(inference_queue, post_proc_queue, annotated_frames_dir, total_frames))
+        post_proc_thread = threading.Thread(target=self._post_processing_worker, args=(post_proc_queue, stats_calculator, total_frames))
 
         inference_thread.start()
         post_proc_thread.start()
@@ -512,17 +524,17 @@ class InferenceManager:
         raw_frames_dir = os.path.dirname(frame_files[0]) if frame_files else None
 
         # Assemble videos from frames using ffmpeg
-        if self.generate_videos:
+        if self.generate_annotated_video:
             # Assemble annotated video
             annotated_output_path = os.path.join(result_dir, 'output.mp4')
             annotated_frames_pattern = os.path.join(annotated_frames_dir, 'frame_%08d.jpg')
             self._assemble_video(annotated_frames_pattern, fps, annotated_output_path)
-            
+        
+        if self.generate_raw_video and raw_frames_dir:
             # Assemble raw video from original frames
-            if raw_frames_dir:
-                raw_output_path = os.path.join(result_dir, 'raw.mp4')
-                raw_frames_pattern = os.path.join(raw_frames_dir, 'frame_%08d.jpg')
-                self._assemble_video(raw_frames_pattern, fps, raw_output_path)
+            raw_output_path = os.path.join(result_dir, 'raw.mp4')
+            raw_frames_pattern = os.path.join(raw_frames_dir, 'frame_%08d.jpg')
+            self._assemble_video(raw_frames_pattern, fps, raw_output_path)
 
         # Clean up frame directories
         try:
@@ -567,8 +579,7 @@ class InferenceManager:
         with open(stats_file, "w") as f:
             json.dump(output_data, f, indent=4)
 
-        # After processing, generate thumbnails for the output video
-        # Prioritize raw.mp4 as it's essential for the on-demand overlay viewer
+        # After processing, generate thumbnails for an available video if any
         raw_video_path = os.path.join(result_dir, 'raw.mp4')
         output_video_path = os.path.join(result_dir, 'output.mp4')
         
