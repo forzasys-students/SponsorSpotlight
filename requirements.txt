@@ -10,3 +10,4 @@ pynvml
 langchain
 langchain-openai
 langgraph
+Pillow
