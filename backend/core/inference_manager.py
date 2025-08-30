@@ -374,7 +374,7 @@ class InferenceManager:
 
         ffmpeg_cmd = [
             'ffmpeg', '-i', video_path,
-            '-qscale:v', '16',  # High-quality JPEG
+            '-qscale:v', '16',  # High-quality JPEG (qscale:v range is 2-31, 2 is highest quality)
             '-f', 'image2', frame_pattern
         ]
 
@@ -397,9 +397,10 @@ class InferenceManager:
         self.progress.update_progress(ProgressStage.POST_PROCESSING, f"Assembling video: {os.path.basename(output_path)}")
         
         ffmpeg_cmd = [
-            'ffmpeg', '-y', '-framerate', str(fps), 
+            'ffmpeg', '-y', '-framerate', str(fps),
             '-i', frames_pattern,
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
+            '-c:v', 'libx264', '-crf', '28', '-preset', 'veryfast',
+            '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-level', '4.1',
             '-movflags', '+faststart',
             output_path
         ]

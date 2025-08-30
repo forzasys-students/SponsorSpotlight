@@ -2,7 +2,7 @@
   "generate_raw_video": true,
   "generate_annotated_video": true,
   "convert_h264": true,
-  "batch_size": 1,
+  "batch_size": 32,
   "precision": "fp16"
 }
 
