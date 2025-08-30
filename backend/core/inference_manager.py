@@ -20,6 +20,8 @@ from backend.utils.progress_manager import ProgressManager, ProgressStage
 from backend.utils.gpu_manager import GPUManager
 from backend.utils.annotator import FrameAnnotator
 from backend.utils.stats_calculator import StatisticsCalculator
+from backend.utils.video_utils import generate_thumbnails, create_thumbnail_sprite
+import logging
 
 class InferenceManager:
     """
@@ -564,6 +566,22 @@ class InferenceManager:
         # Save aggregated statistics to stats.json
         with open(stats_file, "w") as f:
             json.dump(output_data, f, indent=4)
+
+        # After processing, generate thumbnails for the output video
+        # Prioritize raw.mp4 as it's essential for the on-demand overlay viewer
+        raw_video_path = os.path.join(result_dir, 'raw.mp4')
+        output_video_path = os.path.join(result_dir, 'output.mp4')
+        
+        thumbnail_source_video = None
+        if os.path.exists(raw_video_path):
+            thumbnail_source_video = raw_video_path
+        elif os.path.exists(output_video_path):
+            thumbnail_source_video = output_video_path
+
+        if thumbnail_source_video:
+            thumbnail_dir = os.path.join(result_dir, 'thumbnails')
+            generate_thumbnails(thumbnail_source_video, thumbnail_dir)
+            create_thumbnail_sprite(thumbnail_dir, result_dir)
 
         self.progress.update_progress(ProgressStage.COMPLETE, "Processing complete")
 

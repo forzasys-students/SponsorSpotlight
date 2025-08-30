@@ -16,6 +16,7 @@ from backend.api.routes.main_routes import register_main_routes
 from backend.api.routes.file_routes import register_file_routes
 from backend.api.routes.api_routes import register_api_routes
 from backend.api.routes.agent_routes import register_agent_routes
+from backend.api.routes.video_routes import register_video_routes
 
 # Get absolute paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -78,6 +79,8 @@ register_main_routes(app, inference_manager, allowed_file, file_cache.get_hash, 
 register_file_routes(app, allowed_file, file_cache)
 register_api_routes(app)
 register_agent_routes(app, agent_task_manager)
+register_video_routes(app)
+
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5005)
+    app.run(debug=True, host='0.0.0.0', port=5006)
